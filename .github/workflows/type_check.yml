@@ -1,0 +1,41 @@
+
+name: 🦺  Static Type Checking
+on:
+    pull_request:
+
+jobs:
+    test:
+        strategy:
+            matrix:
+                os: [ubuntu-latest]
+                python-version: ["3.9"] # Should be the lowest supported version
+        name: 🦺 Run Static Type Checking
+        runs-on: ${{ matrix.os }}
+        steps:
+            - name: Checkout repository code
+              uses: actions/checkout@v2
+            - name: Install Python ${{ matrix.python-version }}
+              uses: actions/setup-python@v4
+              id: cache
+              with:
+                  python-version: "${{ matrix.python-version }}"
+                  cache: "pip"
+            - name: Restore dependencies
+              id: tox
+              uses: actions/cache/restore@v3
+              with:
+                path: |
+                  .tox
+                key: ${{ runner.os }}-${{ matrix.python-version }}-tox-typecheck
+            - name: Run Static Type Checking
+              run: |
+                  pip install tox poetry
+                  tox -e type_checking
+            - name: Save dependencies
+              id: tox-save
+              uses: actions/cache/save@v3
+              with:
+                path: |
+                  .tox
+                key: ${{ runner.os }}-${{ matrix.python-version }}-tox-typecheck
+

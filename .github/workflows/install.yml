@@ -1,0 +1,40 @@
+
+name: 🔨 Install dependencies
+on:
+    pull_request:
+
+jobs:
+    cinstall:
+        strategy:
+            matrix:
+                os: [ubuntu-latest, windows-latest, macos-latest]
+                python-version: ["3.9", "3.10", "3.11"]
+        name: 🔨 Install dependencies
+        runs-on: ${{ matrix.os }}
+        steps:
+            - name: Checkout repository code
+              uses: actions/checkout@v2
+            - name: Install Python ${{ matrix.python-version }}
+              uses: actions/setup-python@v4
+              id: cache
+              with:
+                  python-version: "${{ matrix.python-version }}"
+                  cache: "pip"       
+            - name: Restore dependencies
+              id: tox
+              uses: actions/cache/restore@v3
+              with:
+                path: |
+                  .tox
+                key: ${{ runner.os }}-${{ matrix.python-version }}-tox-install-${{ hashFiles('**/poetry.lock') }}
+            - name: Check installation procedure
+              run: |
+                  pip install tox poetry
+                  tox -e install
+            - name: Save dependencies
+              id: tox-save
+              uses: actions/cache/save@v3
+              with:
+                path: |
+                  .tox
+                key: ${{ runner.os }}-${{ matrix.python-version }}-tox-install-${{ hashFiles('**/poetry.lock') }}

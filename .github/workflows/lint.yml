@@ -1,0 +1,39 @@
+
+name: 🖋 Check linting
+on:
+    pull_request:
+
+jobs:
+    lint:
+        strategy:
+            matrix:
+                python-version: ["3.11"] # Should be the newest version supported
+        name: 🖋 Check linting
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout repository code
+              uses: actions/checkout@v2
+            - name: Install Python ${{ matrix.python-version }}
+              uses: actions/setup-python@v4
+              id: cache
+              with:
+                  python-version: "${{ matrix.python-version }}"
+                  cache: "pip"
+            - name: Restore dependencies
+              id: tox
+              uses: actions/cache/restore@v3
+              with:
+                path: |
+                  .tox
+                key: ${{ runner.os }}-${{ matrix.python-version }}-tox-lint-${{ hashFiles('**/poetry.lock') }}
+            - name: Check linting
+              run: |
+                  pip install tox poetry
+                  tox -e lint
+            - name: Save dependencies
+              id: tox-save
+              uses: actions/cache/save@v3
+              with:
+                path: |
+                  .tox
+                key: ${{ runner.os }}-${{ matrix.python-version }}-tox-lint-${{ hashFiles('**/poetry.lock') }}
