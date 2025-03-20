@@ -3,6 +3,8 @@ import pytesseract
 import os
 import argparse
 import shutil
+from lpce import PlateExtractor, FTYPE, STYPE
+import sys
 
 def recognize_text(image_path):
     # Wczytaj obraz
@@ -73,8 +75,10 @@ def create_ocr_dataset(folder_path, output_folder):
     print(f"Pliki tekstowe zostały zapisane w folderze: {labels_folder}")
 
 def main():
-    # Ustawienie domyślnych ścieżek
-    default_input_path = "OUTPUT_SINGLE"  # Domyślny folder z obrazami
+    # Generating our istance
+    extractor = PlateExtractor()
+
+    default_input_path = "test-plates"  # Domyślny folder z obrazami
     default_output_path = "ocr-dataset"  # Domyślny folder wyjściowy
     
     # Konfiguracja argumentów wiersza poleceń
@@ -83,7 +87,7 @@ def main():
         "--input", 
         type=str, 
         default=default_input_path, 
-        help="Ścieżka do folderu wejściowego z obrazami (domyślnie: 'OUTPUT_SINGLE')"
+        help="Ścieżka do folderu wejściowego z obrazami (domyślnie: 'test-plates')"
     )
     parser.add_argument(
         "--output", 
@@ -94,9 +98,26 @@ def main():
     
     # Parsowanie argumentów
     args = parser.parse_args()
-    
+
+    extractor.apply_extraction_onpath(input_path=args.input, ftype=FTYPE.SINGLECHAR, stype=STYPE.BINARY)
+
+ 
     # Wywołanie funkcji do tworzenia zbioru OCR
-    create_ocr_dataset(args.input, args.output)
+    create_ocr_dataset("OUTPUT_SINGLE", args.output)
+
+    # Pobranie ścieżki do katalogu, w którym znajduje się skrypt
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # Ścieżka do folderu, który chcemy usunąć
+    folder_paths = [os.path.join(script_dir, "OUTPUT_BOX"), os.path.join(script_dir, "OUTPUT_SINGLE")]
+
+    for folder_path in folder_paths:
+        # Sprawdzenie, czy folder istnieje, a następnie jego usunięcie
+        if os.path.exists(folder_path) and os.path.isdir(folder_path):
+            shutil.rmtree(folder_path)
+            print(f"Folder '{folder_path}' has been deleted.")
+        else:
+            print(f"Folder '{folder_path}' does not exist.")
 
 if __name__ == "__main__":
     main()
