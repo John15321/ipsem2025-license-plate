@@ -16,6 +16,7 @@ numpy = "^2.2.4"
 imutils = "^0.5.4"
 tqdm = "^4.67.1"
 pytesseract = "^0.3.13"
+matplotlib = "^3.10.1"
 
 [tool.poetry.scripts]
 ipsem2025-train = "ipsem2025_license_plate.qnet.cli:main"

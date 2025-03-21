@@ -1,5 +1,5 @@
 import sys
-from lpce import PlateExtractor, FTYPE, STYPE
+from tools import PlateExtractor, FTYPE, STYPE
 
 # Generating our istance
 extractor = PlateExtractor()

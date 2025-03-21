@@ -3,7 +3,7 @@ import pytesseract
 import os
 import argparse
 import shutil
-from lpce import PlateExtractor, FTYPE, STYPE
+from tools import PlateExtractor, FTYPE, STYPE
 import sys
 
 def recognize_text(image_path):
