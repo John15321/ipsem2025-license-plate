@@ -9,7 +9,7 @@ must satisfy. Ensures compatibility with the training pipeline through:
 4. Data Loading: Train/val/test splits
 5. Factory Methods: Path-based creation
 
-Passing tests indicate the dataset interface is well-defined and maintains 
+Passing tests indicate the dataset interface is well-defined and maintains
 type safety, proper error handling, and PyTorch compatibility.
 """
 
@@ -25,27 +25,27 @@ logger = get_logger(__name__)
 
 class DummyDataset(BaseDataset):
     """A minimal concrete implementation of BaseDataset for testing."""
-    
+
     def __init__(self, num_samples: int = 100):
         self.num_samples = num_samples
         self._images = torch.randn(num_samples, 1, 28, 28)  # Simple random images
         self._labels = torch.randint(0, 10, (num_samples,))  # Random labels 0-9
-        
+
     def get_image_dimensions(self):
         return (1, 28, 28)  # Single channel 28x28 images
-        
+
     def get_num_classes(self):
         return 10
-        
+
     def get_class_mapping(self):
         return {i: str(i) for i in range(10)}
-        
+
     def __len__(self):
         return self.num_samples
-        
+
     def __getitem__(self, idx):
         return self._images[idx], self._labels[idx].item()
-    
+
     @classmethod
     def from_path(cls, path, **kwargs):
         return cls(**kwargs)
@@ -84,8 +84,11 @@ def test_data_access():
     assert image.shape == (1, 28, 28)
     assert isinstance(label, int)
     assert 0 <= label < 10
-    logger.info("Data access test passed successfully. Image shape: %s, Label: %d", 
-                str(image.shape), label)
+    logger.info(
+        "Data access test passed successfully. Image shape: %s, Label: %d",
+        str(image.shape),
+        label,
+    )
 
 
 def test_data_loaders():
@@ -97,24 +100,28 @@ def test_data_loaders():
         batch_size=16,
         train_ratio=0.7,
         val_ratio=0.2,
-        num_workers=0  # Use 0 workers for testing
+        num_workers=0,  # Use 0 workers for testing
     )
-    
+
     assert isinstance(train_loader, DataLoader)
     assert isinstance(val_loader, DataLoader)
     assert isinstance(test_loader, DataLoader)
-    
+
     # Check split sizes
     train_size = len(train_loader.dataset)
     val_size = len(val_loader.dataset)
     test_size = len(test_loader.dataset)
-    
+
     assert train_size == 70  # 70% of 100
-    assert val_size == 20    # 20% of 100
-    assert test_size == 10   # Remaining 10%
-    
-    logger.info("Data loader creation successful - Train: %d, Val: %d, Test: %d samples",
-                train_size, val_size, test_size)
+    assert val_size == 20  # 20% of 100
+    assert test_size == 10  # Remaining 10%
+
+    logger.info(
+        "Data loader creation successful - Train: %d, Val: %d, Test: %d samples",
+        train_size,
+        val_size,
+        test_size,
+    )
 
 
 def test_from_path():

@@ -1,22 +1,22 @@
 """Custom dataset implementation for folder-based image datasets."""
 
 import os
-from typing import Dict, Tuple, List, Optional, Any
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 from PIL import Image
 from torchvision import transforms
 
-from .base import BaseDataset
 from ..utils.logging_utils import get_logger
+from .base import BaseDataset
 
 logger = get_logger(__name__)
 
 
 class CustomImageDataset(BaseDataset):
     """Dataset for loading images organized in class folders.
-    
+
     Expected directory structure:
     dataset_root/
         class1/
@@ -28,46 +28,48 @@ class CustomImageDataset(BaseDataset):
             ...
         ...
     """
-    
-    SUPPORTED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff'}
-    
+
+    SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"}
+
     def __init__(
         self,
         root: str,
         transform: Optional[transforms.Compose] = None,
     ):
         """Initialize the custom dataset.
-        
+
         Args:
             root: Root directory containing class folders
             transform: Optional transform to apply to images
         """
         super().__init__()
         self.root = Path(root)
-        
+
         if transform is None:
-            transform = transforms.Compose([
-                transforms.Resize((64, 64)),
-                transforms.ToTensor(),
-            ])
+            transform = transforms.Compose(
+                [
+                    transforms.Resize((64, 64)),
+                    transforms.ToTensor(),
+                ]
+            )
         self.transform = transform
-        
+
         # Find all image files and build class mapping
         self.files: List[Path] = []
         self.class_to_idx: Dict[str, int] = {}
         self._scan_directory()
-        
+
         if not self.files:
             raise ValueError(
                 f"No valid images found in {root}. "
                 f"Supported formats: {', '.join(self.SUPPORTED_EXTENSIONS)}"
             )
-        
+
         logger.info(
             "Initialized CustomImageDataset with %d images in %d classes from %s",
             len(self.files),
             len(self.class_to_idx),
-            root
+            root,
         )
 
     def get_image_dimensions(self) -> Tuple[int, int, int]:
@@ -78,7 +80,7 @@ class CustomImageDataset(BaseDataset):
                 img = self.transform(img)
             if isinstance(img, torch.Tensor):
                 return tuple(img.shape)  # type: ignore
-            return (img.mode == 'RGB' and 3 or 1, *img.size)
+            return (img.mode == "RGB" and 3 or 1, *img.size)
 
     def get_num_classes(self) -> int:
         """Get the number of classes in the dataset."""
@@ -97,18 +99,18 @@ class CustomImageDataset(BaseDataset):
         img_path = self.files[idx]
         class_name = img_path.parent.name
         class_idx = self.class_to_idx[class_name]
-        
+
         # Load and transform image
         with Image.open(img_path) as img:
-            if img.mode != 'RGB':
-                img = img.convert('RGB')
+            if img.mode != "RGB":
+                img = img.convert("RGB")
             if self.transform:
                 img = self.transform(img)
-        
+
         return img, class_idx
 
     @classmethod
-    def from_path(cls, path: str, **kwargs: Any) -> 'CustomImageDataset':
+    def from_path(cls, path: str, **kwargs: Any) -> "CustomImageDataset":
         """Create a dataset instance from a filesystem path."""
         return cls(root=path, **kwargs)
 
@@ -117,45 +119,41 @@ class CustomImageDataset(BaseDataset):
         # Check if directory exists
         if not self.root.exists():
             raise ValueError(f"Dataset root directory does not exist: {self.root}")
-        
+
         if not self.root.is_dir():
             raise ValueError(f"Dataset root path is not a directory: {self.root}")
-        
+
         # Find all subdirectories (class folders)
         try:
             class_dirs = [
-                d for d in self.root.iterdir()
-                if d.is_dir() and not d.name.startswith('.')
+                d
+                for d in self.root.iterdir()
+                if d.is_dir() and not d.name.startswith(".")
             ]
         except Exception as e:
             raise ValueError(f"Error scanning dataset directory: {e}")
-        
+
         if not class_dirs:
             raise ValueError(f"No class directories found in {self.root}")
-        
+
         # Sort class names for deterministic ordering
         class_dirs.sort()
-        
+
         # Create class mapping
-        self.class_to_idx = {
-            d.name: idx for idx, d in enumerate(class_dirs)
-        }
-        
+        self.class_to_idx = {d.name: idx for idx, d in enumerate(class_dirs)}
+
         # Find all valid image files
         for class_dir in class_dirs:
             for ext in self.SUPPORTED_EXTENSIONS:
                 self.files.extend(class_dir.glob(f"*{ext}"))
-        
+
         # Sort files for deterministic ordering
         self.files.sort()
-        
+
         if not self.files:
             raise ValueError(
                 f"No valid images found in {self.root}. "
                 f"Supported formats: {', '.join(self.SUPPORTED_EXTENSIONS)}"
             )
-        
-        logger.debug(
-            "Found classes: %s",
-            ", ".join(self.class_to_idx.keys())
-        )
+
+        logger.debug("Found classes: %s", ", ".join(self.class_to_idx.keys()))
