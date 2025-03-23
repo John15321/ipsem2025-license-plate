@@ -30,7 +30,7 @@ jobs:
             - name: Run tests
               run: |
                   pip install tox poetry
-                  tox -e cov
+                  tox -e cov -- -v --log-cli-level=INFO -s
             - name: Save dependencies
               id: tox-save
               uses: actions/cache/save@v3

@@ -11,7 +11,14 @@ repository = "https://github.com/John15321/ipsem2025-license-plate"
 
 [tool.poetry.dependencies]
 python = ">=3.9, <4"
+torch = "^2.6.0"
+torchvision = "^0.21.0"
+qiskit = "^1.4.2"
+qiskit-machine-learning = "^0.8.2"
 
+[tool.poetry.scripts]
+ipsem2025-train = "ipsem2025_license_plate.ipsem2025_license_plate:main"
+ipsem2025 = "ipsem2025_license_plate.cli:main"
 
 [tool.poetry.group.format.dependencies]
 black = "^25.1.0"
