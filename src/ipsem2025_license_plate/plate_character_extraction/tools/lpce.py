@@ -10,14 +10,15 @@
 
 import os
 import sys
-import cv2
-import imutils
-import numpy as np
-
-from tqdm import tqdm
 from enum import Enum
 from math import sqrt
 from time import time
+
+import cv2
+import imutils
+import numpy as np
+from tqdm import tqdm
+
 
 # Define a custom ENUM to specify which text-extraction function should be executed
 # later on on the last step of the pipeline
@@ -29,11 +30,13 @@ class FTYPE(Enum):
     GRAYSCALE = 4
     SINGLECHAR = 5
 
+
 # If the user should choose SINGLECHAR as type function, he should also specify
 # from which kind of processed plate he'd like to extract the single character.
 class STYPE(Enum):
     BINARY = 1
     EXACT = 2
+
 
 # We now define the main class of this project, the PlateExtractor.
 # This class will hold inside the methods which compose the pipeline.
@@ -51,13 +54,13 @@ class PlateExtractor:
             # If the image (row,col) is lesser than the maximum dimension, we shrink it using
             # the cubic interpolation, whihc we'll give us the best result (at cost of
             # some computational speed).
-            plate = cv2.resize(plate, (240,80), cv2.INTER_CUBIC)
+            plate = cv2.resize(plate, (240, 80), cv2.INTER_CUBIC)
 
         # Otherwise, if the image (row,col) exceed the maximum dimension
         elif plate.shape[0] > 80 or plate.shape[1] > 240:
 
             # we'll use the INTER_AREA interpolation.
-            plate = cv2.resize(plate, (240,80), cv2.INTER_AREA)
+            plate = cv2.resize(plate, (240, 80), cv2.INTER_AREA)
 
         return plate
 
@@ -67,7 +70,7 @@ class PlateExtractor:
     def display_pipeline(self, name, plate):
         cv2.imshow(name, plate)
         cv2.waitKey(0)
-        
+
     # End
 
     # Function that, given a plate image, will do various preprocessing operations to
@@ -76,7 +79,8 @@ class PlateExtractor:
 
         # If the display flag is set to true, we'll going to display the ENTIRE PIPELINE
         # of our methods. This will be the only comments explaining that.
-        if display: self.display_pipeline("Raw Plate", plate)
+        if display:
+            self.display_pipeline("Raw Plate", plate)
 
         # Before going into the preprocessing, we need to scale our image ot a fixed
         # size of (80, 240) to be consistent in our steps.
@@ -88,15 +92,16 @@ class PlateExtractor:
         hsv_plate = cv2.cvtColor(plate, cv2.COLOR_BGR2HSV)
 
         # PIPELINE SHOW
-        if display: self.display_pipeline("HSV Plate", hsv_plate)
+        if display:
+            self.display_pipeline("HSV Plate", hsv_plate)
 
         # define a custom range for lower and upper blue values in HSV space; this
         # was taken by analyze the specific type of image to preprocess, in our case
         # 240x80 matrixes that present the same scene, using a HSV Color Picker
         # made with OpenCV. That said, with the Saturation channel max range imposed
         # to 170, we're excluding most of the blues from the final image range.
-        lower = np.array([0,0,0])
-        upper = np.array([179,170,255])
+        lower = np.array([0, 0, 0])
+        upper = np.array([179, 170, 255])
 
         # We then use inRange, that checks if array elements lie between the elements
         # of two other arrays. In this case, our first array is the plate to threshold,
@@ -108,14 +113,16 @@ class PlateExtractor:
         mask_blue = cv2.inRange(hsv_plate, lower, upper)
 
         # PIPELINE SHOW
-        if display: self.display_pipeline("Blue mask", mask_blue)
+        if display:
+            self.display_pipeline("Blue mask", mask_blue)
 
         # Using a simple and fairly lightweight median blur to suppress white noise into
         # the mask image
         mask_blue_filtered = cv2.medianBlur(mask_blue, 3)
 
         # PIPELINE SHOW
-        if display: self.display_pipeline("Blue mask filtered", mask_blue_filtered)
+        if display:
+            self.display_pipeline("Blue mask filtered", mask_blue_filtered)
 
         # Before moving on the pipeline, we're gonna use the blue mask to extract the outer
         # (x,y) coordinates of the left and right blue band, since those will be useful
@@ -152,19 +159,21 @@ class PlateExtractor:
             # mask image to detach rectangle mask from the border, since we're going to use
             # findContours to fulfill our scope. We achieve this by using numpy slicing on the
             # rows as follow, to replace on the bottom and top row (0-max cols) white pixels.
-            mask_blue_filtered[0][0:max_width-1] = 255
-            mask_blue_filtered[max_height-1][0:max_width-1] = 255
+            mask_blue_filtered[0][0 : max_width - 1] = 255
+            mask_blue_filtered[max_height - 1][0 : max_width - 1] = 255
 
             # We do the same on the leftmost and rightmost column, replacing their values
             # with blue pixels: we do this by a simple iteration for the sake of simplicity
             for i in range(max_height):
                 mask_blue_filtered[i][0] = 255
-                mask_blue_filtered[i][max_width-1] = 255
+                mask_blue_filtered[i][max_width - 1] = 255
 
             # We now call findContours to find the contours of the mask element (that should be
             # composed by the two blue mask rectangle. Note that we could have a decomposed black
             # mask, so we could deal with more contours than the expected).
-            mask_contours = cv2.findContours(mask_blue_filtered, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            mask_contours = cv2.findContours(
+                mask_blue_filtered, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
+            )
 
             # Using the grab_contours function we return instead of a multi-dimensional array
             # containing both contours and hierarchy only the contours of an image, correctly
@@ -172,23 +181,25 @@ class PlateExtractor:
             mask_contours = imutils.grab_contours(mask_contours)
 
             # PIPELINE SHOW
-            if display: self.display_pipeline("Framed blue mask", mask_blue_filtered)
+            if display:
+                self.display_pipeline("Framed blue mask", mask_blue_filtered)
 
             # For drawing purposes in the debug section later on
             mask_blue_copy = None
-            if display: mask_blue_copy = cv2.cvtColor(mask_blue_filtered, cv2.COLOR_GRAY2BGR)
+            if display:
+                mask_blue_copy = cv2.cvtColor(mask_blue_filtered, cv2.COLOR_GRAY2BGR)
 
             # Now, we need to find the most inner width coordinate in which the blue boxes
             # extends. We do such thing to use those coordinate to exclude everything before
             # those coordinates, since they represent a blue band.
             # We initialize the midpoint and the leftmost and rightmost width coordinate.
-            image_midpoint = round(plate.shape[1]/2)
+            image_midpoint = round(plate.shape[1] / 2)
 
             # For every contour in the found contours in the mask
             for contour in mask_contours:
 
                 # extract the x,y,w,h coordinates
-                [x,y,w,h] = cv2.boundingRect(contour)
+                [x, y, w, h] = cv2.boundingRect(contour)
 
                 # Check for noise: after the blue mask post-processing (median and closing)
                 # the contour should contains only the contour representing the blue bounding
@@ -196,7 +207,7 @@ class PlateExtractor:
                 # areas, we calculate the area of the bounding box: if the area is lesser than
                 # the 5% of the area (empirical), we're dealing with a potential noise or symbol:
                 # we just skip that.
-                if (w*h) < (5*(plate.shape[1]*plate.shape[0]))/100:
+                if (w * h) < (5 * (plate.shape[1] * plate.shape[0])) / 100:
                     continue
 
                 # check if the x coordinate (width) is placed left or right the midpoint
@@ -228,7 +239,9 @@ class PlateExtractor:
                 # DEBUG PURPOSES:
                 if display:
                     print("CONTOUR BOX FOUND: {}".format(cv2.boundingRect(contour)))
-                    cv2.rectangle(mask_blue_copy, (x,y), ((x + w), (y+h)+5), (0,255,0), 3)
+                    cv2.rectangle(
+                        mask_blue_copy, (x, y), ((x + w), (y + h) + 5), (0, 255, 0), 3
+                    )
                     cv2.imshow("contours", mask_blue_copy)
                     cv2.waitKey(0)
 
@@ -243,19 +256,33 @@ class PlateExtractor:
         if display:
 
             # DIsplay infos about coordinates
-            print("Max extension of left band: {} - Starting point of right band: {}".format(
-            optimal_left_width, optimal_right_width
-            ))
+            print(
+                "Max extension of left band: {} - Starting point of right band: {}".format(
+                    optimal_left_width, optimal_right_width
+                )
+            )
 
             # Getting a copy
             copy_mask = mask_blue_filtered.copy()
 
             # Draw left blue band: We'd like to draw the rectangle starting at (0,0) and finishing
             # at the optimal left width found with the maximum height possible (80 by default)
-            cv2.rectangle(copy_mask, (0, 0), ((0 + optimal_left_width), (0+plate.shape[0])), 0, -1)
+            cv2.rectangle(
+                copy_mask,
+                (0, 0),
+                ((0 + optimal_left_width), (0 + plate.shape[0])),
+                0,
+                -1,
+            )
 
             # Draw right blue band: same concept here, but using the rightmost values
-            cv2.rectangle(copy_mask, (optimal_right_width, 0), (plate.shape[1], plate.shape[0]), 0, -1)
+            cv2.rectangle(
+                copy_mask,
+                (optimal_right_width, 0),
+                (plate.shape[1], plate.shape[0]),
+                0,
+                -1,
+            )
 
             # Display it
             self.display_pipeline("Final Mask", copy_mask)
@@ -264,19 +291,24 @@ class PlateExtractor:
         gray_plate = cv2.cvtColor(plate, cv2.COLOR_BGR2GRAY)
 
         # PIPELINE SHOW
-        if display: self.display_pipeline("Gray plate", gray_plate)
+        if display:
+            self.display_pipeline("Gray plate", gray_plate)
 
         # Normalize the grayscale image to enhance the dark and white areas
         cv2.normalize(gray_plate, gray_plate, 0, 255, cv2.NORM_MINMAX)
 
         # PIPELINE SHOW
-        if display: self.display_pipeline("Gray plate normalized", gray_plate)
+        if display:
+            self.display_pipeline("Gray plate normalized", gray_plate)
 
         # Apply the generated blue mask on the grayscale plate image
-        gray_plate_masked = cv2.bitwise_and(gray_plate, gray_plate, mask=mask_blue_filtered)
+        gray_plate_masked = cv2.bitwise_and(
+            gray_plate, gray_plate, mask=mask_blue_filtered
+        )
 
         # PIPELINE SHOW
-        if display: self.display_pipeline("Gray plate masked", gray_plate_masked)
+        if display:
+            self.display_pipeline("Gray plate masked", gray_plate_masked)
 
         # Now we need to use an adaptive threshold to generate a good approssimation
         # of the binarized image, useful to binarize text in an optimal way: we then
@@ -286,45 +318,70 @@ class PlateExtractor:
         # this value give us an adaptive way to threshold the image based on the content
         # of the analyzed plate (darker, brigther, blurred etc). We then invert the
         # binarized image to retrieve the text in white (more precise)
-        binarized = cv2.adaptiveThreshold(gray_plate_masked,
-                                          255,
-                                          cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                                          cv2.THRESH_BINARY_INV,
-                                          15,
-                                          sqrt(gray_plate_masked.std())/2)
-
+        binarized = cv2.adaptiveThreshold(
+            gray_plate_masked,
+            255,
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY_INV,
+            15,
+            sqrt(gray_plate_masked.std()) / 2,
+        )
 
         # PIPELINE SHOW
-        if display: self.display_pipeline("Gray plate binarized", binarized)
+        if display:
+            self.display_pipeline("Gray plate binarized", binarized)
 
         # To suppress eventual noise in the binarization, we do use another media filter,
         # this time fairly weak to delete white noise in the binarization.
         binarized_filtered = cv2.medianBlur(binarized, 3)
 
         # PIPELINE SHOW
-        if display: self.display_pipeline("Binarized filtered", binarized_filtered)
+        if display:
+            self.display_pipeline("Binarized filtered", binarized_filtered)
 
         # Let's now use the coordinates found with adaptive_bands to draw black rectangles representing
         # the part of the band we need to filter out. We decide to not draw upper and lower mask rectangle
         # because there are cases in which the plate is oblique: drawing those will cut character out.
         # Draw left blue band: We'd like to draw the rectangle starting at (0,0) and finishing
         # at the optimal left width found with the maximum height possible (80 by default)
-        cv2.rectangle(binarized_filtered, (0, 0), ((0 + optimal_left_width), (0+plate.shape[0])), 0, -1)
+        cv2.rectangle(
+            binarized_filtered,
+            (0, 0),
+            ((0 + optimal_left_width), (0 + plate.shape[0])),
+            0,
+            -1,
+        )
 
         # Draw right blue band: same concept here, but using the rightmost values
-        cv2.rectangle(binarized_filtered, (optimal_right_width, 0), (plate.shape[1], plate.shape[0]), 0, -1)
+        cv2.rectangle(
+            binarized_filtered,
+            (optimal_right_width, 0),
+            (plate.shape[1], plate.shape[0]),
+            0,
+            -1,
+        )
 
         # Draw upper and lower band: OPTIONAL, works really good with horizontal LP images but
         # struggle with oblique LP images
-        #cv2.rectangle(binarized_filtered, (0, 0), (240, optimal_lower_height), 0, -1)
-        #cv2.rectangle(binarized_filtered, (0, optimal_upper_height), (240, 80), 0, -1)
+        # cv2.rectangle(binarized_filtered, (0, 0), (240, optimal_lower_height), 0, -1)
+        # cv2.rectangle(binarized_filtered, (0, optimal_upper_height), (240, 80), 0, -1)
 
         # PIPELINE SHOW
-        if display: self.display_pipeline("Binarized masked", binarized_filtered)
+        if display:
+            self.display_pipeline("Binarized masked", binarized_filtered)
 
         # We then return both the image filtered, binarized and with the mask applied on,
         # and the grayscale image for further analysis.
-        return gray_plate, binarized_filtered, (optimal_left_width, optimal_right_width, optimal_lower_height, optimal_upper_height)
+        return (
+            gray_plate,
+            binarized_filtered,
+            (
+                optimal_left_width,
+                optimal_right_width,
+                optimal_lower_height,
+                optimal_upper_height,
+            ),
+        )
 
     # End
 
@@ -334,7 +391,13 @@ class PlateExtractor:
     # the plate characters identified. Note that, if precise_masking is set to true,
     # the contours of the final image will be, instead of the bounding box, the precise
     # contours of the characters into the image.
-    def extract_contours(self, preprocessed_plate, precise_masking=False, band_coordinates=(25, 215), display=False):
+    def extract_contours(
+        self,
+        preprocessed_plate,
+        precise_masking=False,
+        band_coordinates=(25, 215),
+        display=False,
+    ):
 
         # Using the function findContours, we aim to extract contours and borders
         # from a given image. This function, since take in input the RETR_TREE flag,
@@ -342,7 +405,9 @@ class PlateExtractor:
         # the relationship between bounds. Specifying only one returning elements we
         # store in contours both the contour of the input and the hierarchy, fundamental
         # for our next step.
-        contours = cv2.findContours(preprocessed_plate, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        contours = cv2.findContours(
+            preprocessed_plate, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
+        )
 
         # Using the grab_contours function we return instead of a multi-dimensional array
         # containing both contours and hierarchy only the contours of an image, correctly
@@ -357,14 +422,16 @@ class PlateExtractor:
         # Create a black image with same size of the input image: this will be useful to
         # draw filled white boxes using the contour coordinate. Those boxes will be useful
         # in the next step when we'll use this generated image as a mask to extract characters.
-        text_mask = np.zeros((preprocessed_plate.shape[0], preprocessed_plate.shape[1]), dtype=np.uint8)
+        text_mask = np.zeros(
+            (preprocessed_plate.shape[0], preprocessed_plate.shape[1]), dtype=np.uint8
+        )
 
         # To achieve better modularity we'll store the character bounding box inside
         # an array.
         bounding_contours = []
 
         # Iterate through all the possible contour in the contours array
-        for i,contour in enumerate(contours):
+        for i, contour in enumerate(contours):
 
             # Given a set of coordinate points stored in a single contour object,
             # we tehn use boundingRect to calculates the up-right bounding rectangle of
@@ -403,14 +470,14 @@ class PlateExtractor:
             # NOTE: the interval was taken analyzing characters of various plate images.
             if 5 <= w <= 28 and 35 <= h <= 63:
 
-            # Now, before performing whatever operation, we check which kind of contouring
-            # we'd like to have: if precise_masking is set to True, that means we do not
-            # want to draw bounding boxes around the characters but instead we want to draw
-            # a precise mask of the character itself filled with a white solid color.
-            # Instead, if precise_masking is set to False, we then use the given positions
-            #`in terms of coordinate and width/height to draw a filled rectangle on the
-            # text_mask black empty image, aimed to draw white boxes that later will be
-            # used as a mask to extract characters from the plate.
+                # Now, before performing whatever operation, we check which kind of contouring
+                # we'd like to have: if precise_masking is set to True, that means we do not
+                # want to draw bounding boxes around the characters but instead we want to draw
+                # a precise mask of the character itself filled with a white solid color.
+                # Instead, if precise_masking is set to False, we then use the given positions
+                # `in terms of coordinate and width/height to draw a filled rectangle on the
+                # text_mask black empty image, aimed to draw white boxes that later will be
+                # used as a mask to extract characters from the plate.
                 if precise_masking:
                     # If precise_masking is True, then we just draw a filled character
                     # contour in the mask destination
@@ -427,7 +494,11 @@ class PlateExtractor:
 
                     # PIPELINE SHOW
                     if display:
-                        print("{} CONTOUR PASSED: H = {} / W = {} / x = {} / y = {}".format(i, h, w, x, y))
+                        print(
+                            "{} CONTOUR PASSED: H = {} / W = {} / x = {} / y = {}".format(
+                                i, h, w, x, y
+                            )
+                        )
                         self.display_pipeline("Text Mask", text_mask)
 
                 else:
@@ -446,22 +517,30 @@ class PlateExtractor:
 
                     # PIPELINE SHOW
                     if display:
-                        print("{} CONTOUR PASSED: H = {} / W = {} / x = {} / y = {}".format(i, h, w, x, y))
+                        print(
+                            "{} CONTOUR PASSED: H = {} / W = {} / x = {} / y = {}".format(
+                                i, h, w, x, y
+                            )
+                        )
                         self.display_pipeline("Text Mask", text_mask)
             else:
                 # If here, that means the boundingRect coordinates did not pass the test;
                 # we're then dealing with a FALSE POSITIVE that should be ignored. Display
                 # information and skip the iteration cycle
                 # PIPELINE SHOW
-                if display: print("{} CONTOUR NOT PASSED: H = {} / W = {} / x = {} / y = {}".format(i, h, w, x, y))
+                if display:
+                    print(
+                        "{} CONTOUR NOT PASSED: H = {} / W = {} / x = {} / y = {}".format(
+                            i, h, w, x, y
+                        )
+                    )
                 continue
-
 
         # We want to remove unwanted contours. That is to say, contours nested one in another.
         # So we sort the bounding boxes by x position and we proceed to check a constraint
         # on the top left and bottom right corners of the squares. We assume external square
         # always antecede internal squares as their "x" is smaller.
-        bounding_contours = sorted(bounding_contours, key = lambda x: x[0])
+        bounding_contours = sorted(bounding_contours, key=lambda x: x[0])
 
         # Having the contours sorted by the x position (i.e.: columns) we now check
         # for every contour in bounding_contours if there are some nested contours
@@ -473,8 +552,8 @@ class PlateExtractor:
 
             # Initialize empty x,y,w,h values needed later for nested contours check:
             # we do this both for the current contour and previous one
-            [x_c, y_c, w_c, h_c] = [0,0,0,0]
-            [x_p, y_p, w_p, h_p] = [0,0,0,0]
+            [x_c, y_c, w_c, h_c] = [0, 0, 0, 0]
+            [x_p, y_p, w_p, h_p] = [0, 0, 0, 0]
 
             # Check now if we're dealing with a precise masking or not: remember that,
             # a precise masking bounding_contours array is composed by 3 main elements,
@@ -484,8 +563,7 @@ class PlateExtractor:
                 # Extracting the boundingRect coordinate from the contous points, both
                 # current and previous
                 [x_c, y_c, w_c, h_c] = cv2.boundingRect(contour[2])
-                [x_p, y_p, w_p, h_p] = cv2.boundingRect(bounding_contours[i-1][2])
-
+                [x_p, y_p, w_p, h_p] = cv2.boundingRect(bounding_contours[i - 1][2])
 
             # Else, precise masking is set to false, and the len of contour is four:
             # x,y,w,h given by the non-precise masking bounding boxes.
@@ -494,7 +572,7 @@ class PlateExtractor:
                 # Assigning the current bounding box coordinates to the existing one,
                 # alongside with the previous one
                 [x_c, y_c, w_c, h_c] = contour
-                [x_p, y_p, w_p, h_p] = bounding_contours[i-1]
+                [x_p, y_p, w_p, h_p] = bounding_contours[i - 1]
 
             # Extracted the points, we now check if the current contour box is inside
             # the previous one (i.e.: the D example). To do that, we check if the current
@@ -506,7 +584,8 @@ class PlateExtractor:
                 bounding_contours.remove(contour)
 
         # PIPELINE SHOW
-        if display: self.display_pipeline("Final mask", text_mask)
+        if display:
+            self.display_pipeline("Final mask", text_mask)
 
         # We then return, after the character mask generation, both the masked text image
         # and the array containing the boxes that represent the characters.
@@ -522,7 +601,6 @@ class PlateExtractor:
         # If the OUTPUT_BOX file does not exists, create one to store the .box files
         if not os.path.isdir("OUTPUT_BOX"):
             os.mkdir("OUTPUT_BOX")
-
 
         # We use a try to catch an eventual error due to an inconsisten name of the plate
         # NOTE: for a correct .box file generation, the plate name should be like this:
@@ -547,7 +625,7 @@ class PlateExtractor:
         # based on the lenght of the bounding_contours: 3 for the precise masking, that
         # will require a boundingRect function on the third element to retrieve [x,y,w,h]
         # 4 for the not-precise masking (and so already in the [x,y,w,h] format)
-        [x,y,w,h] = [0,0,0,0]
+        [x, y, w, h] = [0, 0, 0, 0]
 
         # If the bounding_contours len is > 7 (characters of the plate) proceed with the
         # .box extraction (so if the bounding_contours failed to retrieve all the 7 boxes
@@ -560,10 +638,10 @@ class PlateExtractor:
             # We then open and create a file with write permission inside the output path
             # of the OUTPUT_BOX folder: it's name will be identical to the PLATE ID to
             # mantain consistence between box files and plates.
-            with open(os.path.join("OUTPUT_BOX", "{}.box".format(ID)), 'w') as file:
+            with open(os.path.join("OUTPUT_BOX", "{}.box".format(ID)), "w") as file:
 
                 # Enumerating the plate lenght (7 characters)
-                for ind,char in enumerate(plate):
+                for ind, char in enumerate(plate):
 
                     # We now check the bounding_contours lenght: if 3, this means the
                     # array was obtained using precise_masking, and so we need to use
@@ -572,23 +650,23 @@ class PlateExtractor:
 
                         # Extract the coordinates in format [x,y,w,h] using the contours
                         # points
-                        [x,y,w,h] = cv2.boundingRect(bounding_contours[ind][2])
+                        [x, y, w, h] = cv2.boundingRect(bounding_contours[ind][2])
 
                     # Otherwise the non-precise masking was used and we can simply extract
                     # the coordinates tuple by accessing the bounding_contours at that very index
                     else:
-                        [x,y,w,h] = bounding_contours[ind]
+                        [x, y, w, h] = bounding_contours[ind]
 
                     # We now get the coordinates: since tesseract uses the y axis inverted
                     # (not like openCV that uses (y,x), tesseract do use (x,y)) we need to
                     # invert coordinates in such manner. We use the height to invert them.
                     left = x
-                    bottom = height - (y+h)
+                    bottom = height - (y + h)
                     right = left + w
                     top = height - y
 
                     # We then write in the file the char followed by it's coordinate just fetched.
-                    file.write("%s %d %d %d %d 0 \n" % (char,left,bottom,right,top))
+                    file.write("%s %d %d %d %d 0 \n" % (char, left, bottom, right, top))
 
     # End
 
@@ -599,7 +677,21 @@ class PlateExtractor:
     # to false; this flags will be activated by the appropriate function.
     # Also, a stype (singletype) flag is passed, to let the grayscale_sametext_single which
     # function has to be applied to retrieve the single characters.
-    def extract_text(self, bin_plate, gray_plate, plate, adaptive_coord, contours_coordinates, mask, name, ftype, stype, write=False, ret=False, display=False):
+    def extract_text(
+        self,
+        bin_plate,
+        gray_plate,
+        plate,
+        adaptive_coord,
+        contours_coordinates,
+        mask,
+        name,
+        ftype,
+        stype,
+        write=False,
+        ret=False,
+        display=False,
+    ):
 
         # Now check whatever funciton the user needs with some ifs
         if ftype == FTYPE.ALL:
@@ -607,7 +699,7 @@ class PlateExtractor:
             # because it's useless to return all the images; just write them on disk.
             # Same reason apply to display: we need to write down, not display them.
             ret = False
-            display= False
+            display = False
 
             # Calling every text-extraction function: since the flag is ALL, we need
             # to write on the disk EVERY possible kind of text-extraction method.
@@ -624,10 +716,14 @@ class PlateExtractor:
             # binary or grayscale. We then pass the appropriate image to the function.
             if stype == STYPE.BINARY:
                 # If the extraction needed is from binary, pass the binary plate
-                self.grayscale_sametext_single(bin_plate, contours_coordinates, name, mask, stype)
+                self.grayscale_sametext_single(
+                    bin_plate, contours_coordinates, name, mask, stype
+                )
             else:
                 # Else, the extraction if from the grayscale image.
-                self.grayscale_sametext_single(plate, contours_coordinates, name, mask, stype)
+                self.grayscale_sametext_single(
+                    plate, contours_coordinates, name, mask, stype
+                )
 
         elif ftype == FTYPE.SMOOTH:
             # return smooth (returns none in case ret is false)
@@ -639,7 +735,9 @@ class PlateExtractor:
 
         elif ftype == FTYPE.GRAYSCALE:
             # return grayscale text binarized (returns none in case ret is false)
-            return self.grayscale_text(plate, name, mask, write, ret, display, adaptive_coord)
+            return self.grayscale_text(
+                plate, name, mask, write, ret, display, adaptive_coord
+            )
 
         elif ftype == FTYPE.EXACT:
             # return exact text of grayscale (returns none in case ret is false)
@@ -652,10 +750,14 @@ class PlateExtractor:
             # As above, we must check which kind of plate is needed from the extraction.
             if stype == STYPE.BINARY:
                 # If the extraction needed is from binary, pass the binary plate
-                self.grayscale_sametext_single(bin_plate, contours_coordinates, name, mask, stype)
+                self.grayscale_sametext_single(
+                    bin_plate, contours_coordinates, name, mask, stype
+                )
             else:
                 # Else, the extraction is made on the rgb plate
-                self.grayscale_sametext_single(plate, contours_coordinates, name, mask, stype)
+                self.grayscale_sametext_single(
+                    plate, contours_coordinates, name, mask, stype
+                )
 
         else:
             # if ftype was wrong return -1 as error
@@ -706,7 +808,14 @@ class PlateExtractor:
             diff_img = 255 - cv2.absdiff(plane, bg_img)
 
             # Normalize the result to enhance differences
-            norm_img = cv2.normalize(diff_img, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8UC1)
+            norm_img = cv2.normalize(
+                diff_img,
+                None,
+                alpha=0,
+                beta=255,
+                norm_type=cv2.NORM_MINMAX,
+                dtype=cv2.CV_8UC1,
+            )
 
             # Append the processed plane to the arrasy
             result_planes.append(diff_img)
@@ -722,43 +831,54 @@ class PlateExtractor:
     # clean image containing only the characters of the plate, smoothed and thickened
     # with some post-processing. It will also write the image with the name passed
     # on the specified directory.
-    def binarized_smooth(self, binarized_plate, image_name,  text_mask, write, ret, display):
+    def binarized_smooth(
+        self, binarized_plate, image_name, text_mask, write, ret, display
+    ):
 
         # Simply applying the text mask on the filtered image will give us
         # an image resulting in only characters of the plate
-        masked_binarized = cv2.bitwise_and(binarized_plate, binarized_plate, mask=text_mask)
+        masked_binarized = cv2.bitwise_and(
+            binarized_plate, binarized_plate, mask=text_mask
+        )
 
         # PIPELINE SHOW
-        if display: self.display_pipeline("Masked binarized", masked_binarized)
+        if display:
+            self.display_pipeline("Masked binarized", masked_binarized)
 
         # Inverting the image to convert white text to black text
         text_image = cv2.threshold(masked_binarized, 127, 255, cv2.THRESH_BINARY_INV)[1]
 
         # PIPELINE SHOW
-        if display: self.display_pipeline("Binarized not smoothed", text_image)
+        if display:
+            self.display_pipeline("Binarized not smoothed", text_image)
 
         # Blurring the image with a medium gaussian filter
-        text_blur = cv2.GaussianBlur(text_image,(5,5),0)
+        text_blur = cv2.GaussianBlur(text_image, (5, 5), 0)
 
         # Adding the weighted sum of the base image and the gaussian blur to retrieve
         # a smoother contour
-        text_weighted = cv2.addWeighted(text_blur,1.5,text_image,-0.5,0)
+        text_weighted = cv2.addWeighted(text_blur, 1.5, text_image, -0.5, 0)
 
         # Binarizing the resulting image to remove blurry areas
         text_binarized = cv2.threshold(text_weighted, 230, 255, cv2.THRESH_BINARY)[1]
 
         # thicken the image with a closing (dilation+erosion)
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-        text_final = cv2.morphologyEx(text_binarized, cv2.MORPH_CLOSE, kernel, iterations=1)
+        text_final = cv2.morphologyEx(
+            text_binarized, cv2.MORPH_CLOSE, kernel, iterations=1
+        )
 
         # PIPELINE SHOW
-        if display: self.display_pipeline("Binarized Smoothed", text_final)
+        if display:
+            self.display_pipeline("Binarized Smoothed", text_final)
 
         # Write output on disk
-        if write: self.write_on_path("OUTPUT_SMOOTH", text_final, image_name)
+        if write:
+            self.write_on_path("OUTPUT_SMOOTH", text_final, image_name)
 
         # Return the text image if specified
-        if ret: return text_final
+        if ret:
+            return text_final
 
     # END
 
@@ -766,64 +886,84 @@ class PlateExtractor:
     # clean image containing only the characters of the plate contained into the
     # binarized image. It will also write the image with the name passed
     # on the specified directory.
-    def binarized_text(self, binarized_plate, image_name, text_mask, write, ret, display):
+    def binarized_text(
+        self, binarized_plate, image_name, text_mask, write, ret, display
+    ):
 
         # Since we got the binarized plate, we just apply the mask on it
         # to retrieve the plate characters
-        masked_binarized = cv2.bitwise_and(binarized_plate, binarized_plate, mask=text_mask)
+        masked_binarized = cv2.bitwise_and(
+            binarized_plate, binarized_plate, mask=text_mask
+        )
 
         # PIPELINE SHOW
-        if display: self.display_pipeline("Mask binarized", masked_binarized)
+        if display:
+            self.display_pipeline("Mask binarized", masked_binarized)
 
         # Wr then invert the color to have the text in black instead of white
         text_final = cv2.threshold(masked_binarized, 127, 255, cv2.THRESH_BINARY_INV)[1]
 
         # PIPELINE SHOW
-        if display: self.display_pipeline("Output", text_final)
+        if display:
+            self.display_pipeline("Output", text_final)
 
         # Write output on disk if specified
-        if write: self.write_on_path("OUTPUT_BINARIZED", text_final, image_name)
+        if write:
+            self.write_on_path("OUTPUT_BINARIZED", text_final, image_name)
 
         # Return the text image if specified
-        if ret: return text_final
+        if ret:
+            return text_final
 
     # END
 
     # Function that given the grayscale image and the mask, will produce a
     # clean and enhanced image.
-    def grayscale_text(self, plate, image_name, text_mask, write, ret, display, adaptive_coord):
+    def grayscale_text(
+        self, plate, image_name, text_mask, write, ret, display, adaptive_coord
+    ):
 
         # Apply the enhancement on the plate
         grayscale_plate = self.enhance_plate(plate)
 
         # PIPELINE SHOW
-        if display: self.display_pipeline("Grayscale enhanced output", grayscale_plate)
+        if display:
+            self.display_pipeline("Grayscale enhanced output", grayscale_plate)
 
         # Given the enhanced plate, now we'll cut the blue band with the coordinates found
         # in the preprocessing step: note that, the coordinates could be adaptive (found by
         # the band contour method) or static (Defaultly assigned).
         # Cut from the left band coordinate found to the end
-        grayscale_plate_crop = grayscale_plate[adaptive_coord[2]:adaptive_coord[3], adaptive_coord[0]:grayscale_plate.shape[1]]
+        grayscale_plate_crop = grayscale_plate[
+            adaptive_coord[2] : adaptive_coord[3],
+            adaptive_coord[0] : grayscale_plate.shape[1],
+        ]
 
         # Now cut from 0 to the rightmost starting band coordinate: remember that, the image has
         # been cropped from the left so we need to subtract to the rightmost coordinate the
         # pixels that now are missing (from 0 to adaptive_coord[0]).
-        grayscale_plate_crop = grayscale_plate_crop[:, 0:(adaptive_coord[1]-adaptive_coord[0])]
+        grayscale_plate_crop = grayscale_plate_crop[
+            :, 0 : (adaptive_coord[1] - adaptive_coord[0])
+        ]
 
         # PIPELINE SHOW
-        if display: self.display_pipeline("Grayscale cropped", grayscale_plate_crop)
+        if display:
+            self.display_pipeline("Grayscale cropped", grayscale_plate_crop)
 
         # Reshape to original size
         grayscale_plate = self.optimal_resize(grayscale_plate_crop)
 
         # PIPELINE SHOW
-        if display: self.display_pipeline("Grayscale cropped resized", grayscale_plate)
+        if display:
+            self.display_pipeline("Grayscale cropped resized", grayscale_plate)
 
         # Write output on disk
-        if write: self.write_on_path("OUTPUT_GRAYSCALE_BIN", grayscale_plate, image_name)
+        if write:
+            self.write_on_path("OUTPUT_GRAYSCALE_BIN", grayscale_plate, image_name)
 
         # Return the text image if specified
-        if ret: return grayscale_plate
+        if ret:
+            return grayscale_plate
 
     # END
 
@@ -838,22 +978,31 @@ class PlateExtractor:
 
         # We first do an AND masking with the grayscale enhanced plate to extract the desired
         # zone containing the characters.
-        masked_binarized_and = cv2.bitwise_and(grayscale_plate, grayscale_plate, mask=text_mask)
+        masked_binarized_and = cv2.bitwise_and(
+            grayscale_plate, grayscale_plate, mask=text_mask
+        )
 
         # PIPELINE SHOW
-        if display: self.display_pipeline("Masked binarized and", masked_binarized_and)
+        if display:
+            self.display_pipeline("Masked binarized and", masked_binarized_and)
 
         # We then do the negation (not) of the and mask to retrieve the inverse mask
-        masked_binarized_notand=cv2.bitwise_not(masked_binarized_and)
+        masked_binarized_notand = cv2.bitwise_not(masked_binarized_and)
 
         # PIPELINE SHOW
-        if display: self.display_pipeline("Masked binarized not and", masked_binarized_notand)
+        if display:
+            self.display_pipeline("Masked binarized not and", masked_binarized_notand)
 
         # We then apply the text mask on the negation of the and mask retrieved before
-        masked_binarized_andnotand = cv2.bitwise_and(masked_binarized_notand, masked_binarized_notand, mask=text_mask)
+        masked_binarized_andnotand = cv2.bitwise_and(
+            masked_binarized_notand, masked_binarized_notand, mask=text_mask
+        )
 
         # PIPELINE SHOW
-        if display: self.display_pipeline("Masked binarized and not nad", masked_binarized_andnotand)
+        if display:
+            self.display_pipeline(
+                "Masked binarized and not nad", masked_binarized_andnotand
+            )
 
         # We now invert the image to retrieve the original and exact pixel values in their
         # right colors: we extracted ONLY the wanted masked areas into the grayscale image.
@@ -863,14 +1012,16 @@ class PlateExtractor:
         cv2.normalize(masked_grayscale, masked_grayscale, 0, 255, cv2.NORM_MINMAX)
 
         # PIPELINE SHOW
-        if display: self.display_pipeline("Output", masked_grayscale)
+        if display:
+            self.display_pipeline("Output", masked_grayscale)
 
         # Write output on disk if specified
-        if write: self.write_on_path("OUTPUT_GRAYSCALE_EXACT", masked_grayscale, image_name)
+        if write:
+            self.write_on_path("OUTPUT_GRAYSCALE_EXACT", masked_grayscale, image_name)
 
         # Return the text image if specified
-        if ret: return masked_grayscale
-
+        if ret:
+            return masked_grayscale
 
     # END
 
@@ -881,7 +1032,9 @@ class PlateExtractor:
     # will generate seven images, in the order: E(1), X(2), 4(3) etc..).
     # NOTE: this modality doesn't show return anything, it will ONLY write the single character
     # of a given plate on a folder.
-    def grayscale_sametext_single(self, plate, contours_coordinates, image_name, text_mask, stype):
+    def grayscale_sametext_single(
+        self, plate, contours_coordinates, image_name, text_mask, stype
+    ):
 
         # First thing we're going to do, is sort the contours_coordinate by the x coordinate
         # (the first element of both the precise masking and not precise masking result).
@@ -891,7 +1044,7 @@ class PlateExtractor:
         # and y means row. We gonna use a lambda function centered on the first element
         # to sort our array for the column position; lesser column value means precedent
         # position in the plate string.
-        contours_coordinates = sorted(contours_coordinates, key=lambda x:x[0])
+        contours_coordinates = sorted(contours_coordinates, key=lambda x: x[0])
 
         # We then check which type of character we'd like to have in output: extracted
         # from a binary plate or from the enhanced grayscale image. We then initialize
@@ -901,12 +1054,16 @@ class PlateExtractor:
         # And then check which type of function we need for the character extraction
         if stype == STYPE.BINARY:
             # If binary, we need to get the optimal binary image from the plate in input
-            text_image = self.binarized_text(plate, image_name, text_mask, write=False, ret=True, display=False)
+            text_image = self.binarized_text(
+                plate, image_name, text_mask, write=False, ret=True, display=False
+            )
 
         else:
             # Otherwise, we need to extract the single character wanted from a grayscale
             # image.
-            text_image = self.grayscale_sametext(plate, image_name, text_mask, write=False, ret=True, display=False)
+            text_image = self.grayscale_sametext(
+                plate, image_name, text_mask, write=False, ret=True, display=False
+            )
 
         # If not existing, make a folder for the single character output
         if not os.path.isdir("OUTPUT_SINGLE"):
@@ -923,7 +1080,7 @@ class PlateExtractor:
             # bounding box around this caracter is stored. We do this to avoid reduntant
             # operation in the code.
             cur_character = None
-            [x,y,w,h] = [0,0,0,0]
+            [x, y, w, h] = [0, 0, 0, 0]
 
             # Now, first thing we need to check, is the lenght of the contour passed:
             # we have two cases. 1) is when precise_masking was set to true, so the
@@ -960,21 +1117,30 @@ class PlateExtractor:
             # and ready to be used for character extraction purposes.
             # Note that, Using the slicing we'll select ONLY the image part relative to
             # the current analyzed character.
-            cur_character = text_image[y: y+h, x: x+w]
+            cur_character = text_image[y : y + h, x : x + w]
 
             # Make padding border on the image using copyMakeBorder and passing the
             # desired padding size in every direction
             bordersize = 10
-            cur_character = cv2.copyMakeBorder(cur_character, top=bordersize, bottom=bordersize,
-                                               left=bordersize,  right=bordersize,
-                                               borderType=cv2.BORDER_CONSTANT, value=255)
+            cur_character = cv2.copyMakeBorder(
+                cur_character,
+                top=bordersize,
+                bottom=bordersize,
+                left=bordersize,
+                right=bordersize,
+                borderType=cv2.BORDER_CONSTANT,
+                value=255,
+            )
 
             # Having the current character box, we now need to write it into the
             # folder defined by the current image name passed in input: for that,
             # we'll simply use the function write_on_path to write the current
             # character as a single image.
-            self.write_on_path(os.path.join("OUTPUT_SINGLE", image_name.split('.')[0]), cur_character, "{}.png".format(i))
-
+            self.write_on_path(
+                os.path.join("OUTPUT_SINGLE", image_name.split(".")[0]),
+                cur_character,
+                "{}.png".format(i),
+            )
 
     # END
 
@@ -986,7 +1152,17 @@ class PlateExtractor:
     # NOTE: if the input path is a folder, it must contains only images and folders.
     # Defaultly, This function will apply the binarization function as default one,
     # with precise_masking=false (bounding boxes will be returned instead of precise contours)
-    def apply_extraction_onpath(self, input_path=None, desired_ext='png', precise_masking=True, adaptive_bands=True, ftype=FTYPE.BINARY, stype=STYPE.BINARY, ret=False, write=True):
+    def apply_extraction_onpath(
+        self,
+        input_path=None,
+        desired_ext="png",
+        precise_masking=True,
+        adaptive_bands=True,
+        ftype=FTYPE.BINARY,
+        stype=STYPE.BINARY,
+        ret=False,
+        write=True,
+    ):
 
         # Check if path is none then exit
         if input_path is None:
@@ -996,7 +1172,11 @@ class PlateExtractor:
         # First thing, we check if the passed input path is a directory:
         if os.path.isdir(input_path):
 
-            print("Going to extract {} images from: {}".format(len(os.listdir(input_path)), input_path))
+            print(
+                "Going to extract {} images from: {}".format(
+                    len(os.listdir(input_path)), input_path
+                )
+            )
 
             # If so, we are going to extract image by image the files in that directory.
             for file in tqdm(sorted(os.listdir(input_path))):
@@ -1012,22 +1192,41 @@ class PlateExtractor:
                 plate = cv2.imread(os.path.join(input_path, file))
 
                 # extract the grayscale normalized and the binarized optimal plate
-                gray_plate, bin_plate, adaptive_coord = self.adaptive_preprocessing(plate)
+                gray_plate, bin_plate, adaptive_coord = self.adaptive_preprocessing(
+                    plate
+                )
 
                 # we then extract the contours mask
-                contours_coordinate, contours_mask = self.extract_contours(bin_plate, precise_masking=precise_masking, band_coordinates=adaptive_coord)
+                contours_coordinate, contours_mask = self.extract_contours(
+                    bin_plate,
+                    precise_masking=precise_masking,
+                    band_coordinates=adaptive_coord,
+                )
 
                 # Generating a .BOXFILE for an optional tesseract (OCR) training
                 self.generate_boxfile(file, contours_coordinate)
 
                 # Split the filename to extract name and extension and subsitute the
                 # extracted extensione with the desired one in the latter function
-                filename, _ = file.split('.')
+                filename, _ = file.split(".")
 
                 # and extract the text from the image: note that, this function will write
                 # by default results on disk.
-                result = self.extract_text(bin_plate, gray_plate, plate, adaptive_coord, contours_coordinate, contours_mask, "{}.{}".format(filename, desired_ext), ftype, stype, True, False, False)
-        
+                result = self.extract_text(
+                    bin_plate,
+                    gray_plate,
+                    plate,
+                    adaptive_coord,
+                    contours_coordinate,
+                    contours_mask,
+                    "{}.{}".format(filename, desired_ext),
+                    ftype,
+                    stype,
+                    True,
+                    False,
+                    False,
+                )
+
         else:
 
             print("Going to extract characters from: {}".format(input_path))
@@ -1041,22 +1240,40 @@ class PlateExtractor:
             gray_plate, bin_plate, adaptive_coord = self.adaptive_preprocessing(plate)
 
             # we then extract the contours mask
-            contours_coordinate, contours_mask = self.extract_contours(bin_plate, precise_masking=precise_masking, band_coordinates=adaptive_coord)
+            contours_coordinate, contours_mask = self.extract_contours(
+                bin_plate,
+                precise_masking=precise_masking,
+                band_coordinates=adaptive_coord,
+            )
 
             # Generating a .BOXFILE for an optional tesseract (OCR) training
             self.generate_boxfile(input_path, contours_coordinate)
 
             # Split the filename to extract name and extension and subsitute the
             # extracted extensione with the desired one in the latter function
-            filename, _ = input_path.split('.')
+            filename, _ = input_path.split(".")
 
             # and extract the text from the image: note that, this function will write
             # by default results on disk.
-            result = self.extract_text(bin_plate, gray_plate, plate, adaptive_coord, contours_coordinate, contours_mask, "{}.{}".format(filename, desired_ext), ftype, stype, write, ret, False)
-    
-            # If ret was set to true, return the processed plate to the user 
-            if ret: return result
-            
+            result = self.extract_text(
+                bin_plate,
+                gray_plate,
+                plate,
+                adaptive_coord,
+                contours_coordinate,
+                contours_mask,
+                "{}.{}".format(filename, desired_ext),
+                ftype,
+                stype,
+                write,
+                ret,
+                False,
+            )
+
+            # If ret was set to true, return the processed plate to the user
+            if ret:
+                return result
+
         print("All done!")
 
     # END
@@ -1066,30 +1283,62 @@ class PlateExtractor:
     # We also use SMOOTH as standard function and return set to true to retrieve
     # the image processed with the extract_text function.
     # NOTE: this function works only for FTYPE GRAYSCALE, FTYPE EXACT, FTYPE SMOOTH and FTYPE BINARY.
-    def display_result(self, input_path=None, precise_masking=True, adaptive_bands=True, ftype=FTYPE.BINARY, display=True):
+    def display_result(
+        self,
+        input_path=None,
+        precise_masking=True,
+        adaptive_bands=True,
+        ftype=FTYPE.BINARY,
+        display=True,
+    ):
 
         # Exit if no path specified or is a folder
         if input_path is None or os.path.isdir(input_path) is True:
-            print("Path missing OR path inserted is a folder.\nPlease usa a single image when using function 'display_result'.")
+            print(
+                "Path missing OR path inserted is a folder.\nPlease usa a single image when using function 'display_result'."
+            )
             exit(1)
 
-        if ftype==FTYPE.SINGLECHAR:
-            print("Single characters can not be displayed. Please, select another extraction method to display.")
+        if ftype == FTYPE.SINGLECHAR:
+            print(
+                "Single characters can not be displayed. Please, select another extraction method to display."
+            )
             exit(1)
 
         # Reading the plate
         plate = cv2.imread(input_path)
 
         # Apply preprocessing on it to binarize information
-        gray_plate, bin_plate, adaptive_coord = self.adaptive_preprocessing(plate, adaptive_bands, display)
+        gray_plate, bin_plate, adaptive_coord = self.adaptive_preprocessing(
+            plate, adaptive_bands, display
+        )
 
         # We then extract the contours passing the specified precise_masking property
         # and taking only the second of the returned arguments (the image)
-        contours_coordinate, contours_mask = self.extract_contours(bin_plate, precise_masking=precise_masking, band_coordinates=adaptive_coord, display=True)
+        contours_coordinate, contours_mask = self.extract_contours(
+            bin_plate,
+            precise_masking=precise_masking,
+            band_coordinates=adaptive_coord,
+            display=True,
+        )
 
         # we then process the final image containing only the clean text.
-        text = self.extract_text(bin_plate, gray_plate, plate, adaptive_coord, contours_coordinate, contours_mask, "image.png", ftype, None, False, True, display)
+        text = self.extract_text(
+            bin_plate,
+            gray_plate,
+            plate,
+            adaptive_coord,
+            contours_coordinate,
+            contours_mask,
+            "image.png",
+            ftype,
+            None,
+            False,
+            True,
+            display,
+        )
 
     # End
+
 
 # Endclas
