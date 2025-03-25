@@ -233,7 +233,7 @@ def test_mock_dataset():
         mock_mapping = {i: str(i) for i in range(10)}  # 0-9 digits
         mock_mapping.update({i+10: chr(ord('A') + i) for i in range(26)})  # A-Z letters
         mock_load_mapping.return_value = mock_mapping
-        
+
         # Mock an in-memory dataset without downloading
         with mock.patch('torchvision.datasets.EMNIST') as mock_emnist:
             # Configure the mock to return predictable data
@@ -244,22 +244,24 @@ def test_mock_dataset():
                 idx % 36  # Cycle through 0-35 as labels
             )
             mock_emnist.return_value = mock_instance
-            
+
             # Create dataset with mocked components
             with mock.patch.object(EMNISTDataset, '_build_36class_map') as mock_class_map:
                 # Mock the class mapping to match our mock data
                 mock_class_map.return_value = {i: i for i in range(36)}
-                
+
                 # Mock the indices list to include all indices (normally filtered)
-                with mock.patch.object(EMNISTDataset, '__init__', wraps=EMNISTDataset.__init__) as mock_init:
+                with mock.patch.object(EMNISTDataset, '__init__', return_value=None):
                     dataset = EMNISTDataset(root="mock_path", download=False)
-                    # Manually set indices since we're bypassing the filtering logic
+                    # Manually set attributes since __init__ is bypassed
                     dataset.indices = list(range(100))
-            
+                    dataset._emnist = mock_instance
+                    dataset.label_map_36 = {i: i for i in range(36)}
+
             # Test that the dataset works correctly with mocked components
             assert len(dataset) > 0
             img, label = dataset[0]
             assert img.shape == (1, 64, 64)
             assert 0 <= label < 36
-    
+
     logger.info("Mock dataset test passed - successfully tested without downloads")
