@@ -1,7 +1,7 @@
 """EMNIST dataset implementation."""
 
 import os
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, List, Callable
 
 import torch
 import torchvision
@@ -22,6 +22,7 @@ class EMNISTDataset(BaseDataset):
         train: bool = True,
         transform: Optional[transforms.Compose] = None,
         download: bool = True,
+        lazy_load: bool = False,
     ):
         """Initialize the EMNIST dataset.
 
@@ -30,9 +31,13 @@ class EMNISTDataset(BaseDataset):
             train: Whether to load training or test set
             transform: Optional transform to apply to images
             download: Whether to download the dataset if not found
+            lazy_load: Whether to delay loading the dataset until needed
         """
         super().__init__()
         self.root = root  # Store root path for use in other methods
+        self.train = train
+        self.download = download
+        self._emnist = None  # Will hold the actual dataset when loaded
 
         if transform is None:
             transform = transforms.Compose(
@@ -42,29 +47,57 @@ class EMNISTDataset(BaseDataset):
                     transforms.Lambda(lambda x: 1.0 - x),  # invert colors
                 ]
             )
+        self.transform = transform
 
-        # Load the EMNIST dataset
-        self.emnist = torchvision.datasets.EMNIST(
-            root=root,
-            split="bymerge",
-            train=train,
-            download=download,
-            transform=transform,
-        )
-
-        # Load and create label mappings
+        # Load label mappings (these are small and fast to load)
         self.label_to_char = self._load_label_mapping()
         self.label_map_36 = self._build_36class_map()
+        
+        # Initialize indices list (will be populated on first load)
+        self.indices: List[int] = []
+        
+        # Load dataset if not using lazy loading
+        if not lazy_load:
+            self._load_dataset()
+            logger.info(
+                "Initialized EMNISTDataset with %d/%d samples (36-class filtered)",
+                len(self.indices),
+                len(self._emnist),
+            )
+
+    @property
+    def emnist(self):
+        """Lazy-load the EMNIST dataset on first access."""
+        if self._emnist is None:
+            self._load_dataset()
+        return self._emnist
+
+    def _load_dataset(self):
+        """Load the actual EMNIST dataset and filter indices."""
+        if self._emnist is not None:
+            return  # Already loaded
+            
+        logger.info("Loading EMNIST dataset from %s...", self.root)
+        # Load the EMNIST dataset
+        self._emnist = torchvision.datasets.EMNIST(
+            root=self.root,
+            split="bymerge",
+            train=self.train,
+            download=self.download,
+            transform=self.transform,
+        )
 
         # Filter indices to only include our 36 classes
-        self.indices = [
-            i for i, (_, label) in enumerate(self.emnist) if label in self.label_map_36
-        ]
-
+        if not self.indices:
+            # This is a time-consuming operation, so we do it only once
+            self.indices = [
+                i for i, (_, label) in enumerate(self._emnist) if label in self.label_map_36
+            ]
+            
         logger.info(
-            "Initialized EMNISTDataset with %d/%d samples (36-class filtered)",
+            "EMNIST dataset loaded with %d/%d samples (36-class filtered)",
             len(self.indices),
-            len(self.emnist),
+            len(self._emnist),
         )
 
     def get_image_dimensions(self) -> Tuple[int, int, int]:
@@ -86,10 +119,13 @@ class EMNISTDataset(BaseDataset):
 
     def __len__(self) -> int:
         """Get the total number of samples in the dataset."""
+        if not self.indices:
+            self._load_dataset()
         return len(self.indices)
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int]:
         """Get a single sample from the dataset."""
+        # Ensure dataset is loaded
         actual_index = self.indices[idx]
         img, old_label = self.emnist[actual_index]
         new_label = self.label_map_36[old_label]  # map to [0..35]
@@ -149,3 +185,20 @@ class EMNISTDataset(BaseDataset):
 
         logger.info("Created 36-class map: 0-9, A-Z")
         return new_map
+    
+    @staticmethod
+    def exists_at_path(path: str) -> bool:
+        """Check if an EMNIST dataset exists at the given path.
+        
+        This method checks if the dataset files exist without actually loading
+        the dataset, which makes it much faster for validation.
+        
+        Args:
+            path: Path to check for dataset files
+            
+        Returns:
+            True if dataset files exist, False otherwise
+        """
+        # Check for the processed files that indicate a downloaded dataset
+        processed_folder = os.path.join(path, "EMNIST", "processed")
+        return os.path.exists(processed_folder) and len(os.listdir(processed_folder)) > 0

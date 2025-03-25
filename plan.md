@@ -129,7 +129,7 @@
    - Proper feature normalization
 
 2. Quantum Circuit Implementation:
-   - ZZFeatureMap for 6-qubit encoding
+   - ZZFeatureMap for 5-qubit encoding
    - RealAmplitudes circuit with specific gate counts
    - Efficient classical-to-quantum data transfer
 
