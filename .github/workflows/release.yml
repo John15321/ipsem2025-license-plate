@@ -27,7 +27,7 @@ jobs:
       - name: Install Python
         uses: actions/setup-python@v4
         with:
-            python-version: "3.9" # Should be lowest version supported
+            python-version: "3.11" # Should be lowest version supported
       - name: Install Poetry
         run: pip install poetry
       - name: Semantic Release
