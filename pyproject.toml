@@ -2,7 +2,7 @@
 name = "ipsem2025-license-plate"
 # Do not touch the version
 # Is is edited dynamically by the CI job
-version = "0.0.0"
+version = "1.0.0"
 description = "IPSEM 2025 License Plate detection."
 authors = ["Jan Bronicki <janbronicki@gmail.com>",]
 readme = "README.md"
