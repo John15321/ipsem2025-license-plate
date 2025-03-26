@@ -9,8 +9,8 @@ This module provides CLI commands for:
 
 # pylint: disable=broad-exception-caught,unused-argument,too-many-locals
 
+import logging
 import os
-import sys
 import traceback
 from pathlib import Path
 from typing import Optional
@@ -119,7 +119,7 @@ def download_dataset(
     Currently supports EMNIST dataset (36 classes: 0-9, A-Z).
     """
     # Configure logging - use log_level instead of verbose
-    log_level = "DEBUG" if verbose else "INFO"
+    log_level = logging.DEBUG if verbose else logging.INFO  # Use integer log levels
     configure_logging(level=log_level)
 
     console.print(
@@ -224,7 +224,7 @@ def info_command(
     - Image dimensions
     """
     # Configure logging - use log_level instead of verbose
-    log_level = "DEBUG" if verbose else "INFO"
+    log_level = logging.DEBUG if verbose else logging.INFO  # Use integer log levels
     configure_logging(level=log_level)
 
     dataset = load_dataset(dataset_path, dataset_type)
@@ -341,7 +341,7 @@ def preview_command(
     Displays sample images with their labels or saves the preview to a file.
     """
     # Configure logging - use log_level instead of verbose
-    log_level = "DEBUG" if verbose else "INFO"
+    log_level = logging.DEBUG if verbose else logging.INFO  # Use integer log levels
     configure_logging(level=log_level)
 
     console.print(f"Loading dataset from [bold]{dataset_path}[/bold]")
@@ -418,7 +418,7 @@ def validate_command(
     Checks if the dataset follows the expected structure and reports any issues.
     """
     # Configure logging - use log_level instead of verbose
-    log_level = "DEBUG" if verbose else "INFO"
+    log_level = logging.DEBUG if verbose else logging.INFO  # Use integer log levels
     configure_logging(level=log_level)
 
     console.print(f"Validating custom dataset at [bold]{dataset_path}[/bold]")
@@ -530,7 +530,3 @@ def main():
         console.print(f"[bold red]Error:[/bold red] {exc}")
         logger.error("Unhandled exception in CLI: %s", exc)
         return 1
-
-
-if __name__ == "__main__":
-    sys.exit(main())

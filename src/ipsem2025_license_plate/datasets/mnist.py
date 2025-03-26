@@ -23,6 +23,14 @@ class MNISTDataset(BaseDataset):
         transform: Optional[transforms.Compose] = None,
         download: bool = True,
     ):
+        """Initialize the MNIST dataset.
+
+        Args:
+            root: Root directory for dataset storage
+            train: Whether to load training or test set
+            transform: Optional transform to apply to images
+            download: Whether to download the dataset if not found
+        """
         super().__init__()
         self.root = root
         self.train = train
@@ -32,11 +40,7 @@ class MNISTDataset(BaseDataset):
         self.transform = transform
 
         # Load MNIST dataset
-        self.dataset = datasets.MNIST(
-            root=root,
-            train=train,
-        )
-        # Load MNIST dataset
+        logger.info("Loading MNIST dataset from %s (download=%s)", root, download)
         self.dataset = datasets.MNIST(
             root=root,
             train=train,
@@ -95,7 +99,7 @@ class MNISTDataset(BaseDataset):
 
         # Check for processed files
         raw_folder = os.path.join(path, "MNIST", "raw")
-        return all(
+        return os.path.exists(raw_folder) and all(
             os.path.exists(os.path.join(raw_folder, f))
             or os.path.exists(os.path.join(raw_folder, f + ".gz"))
             for f in required_files

@@ -151,7 +151,7 @@ class HybridModel(nn.Module):
         """Returns the depth of the quantum circuit used in the model."""
         return self.feature_map.depth() + self.ansatz.depth()
 
-    def get_model_info(self) -> Dict[str, any]:
+    def get_model_info(self) -> Dict[str, object]:
         """Returns a dictionary with information about the model configuration."""
         return {
             "n_qubits": self.n_qubits,

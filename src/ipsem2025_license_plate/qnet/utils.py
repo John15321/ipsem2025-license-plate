@@ -25,7 +25,7 @@ def get_hardware_info() -> Dict[str, str]:
         "cpu_model": platform.processor(),
         "python_version": platform.python_version(),
         "torch_version": torch.__version__,
-        "cuda_version": torch.version.cuda if torch.cuda.is_available() else "N/A",
+        "cuda_version": torch.version.cuda if torch.cuda.is_available() else "N/A",  # type: ignore
         "total_memory": f"{psutil.virtual_memory().total / (1024**3):.1f}GB",
         "cpu_count": str(psutil.cpu_count(logical=False)),
         "cpu_threads": str(psutil.cpu_count(logical=True)),

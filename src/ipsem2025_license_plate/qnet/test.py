@@ -25,8 +25,17 @@ def evaluate_model(
     total_samples = 0
     criterion = nn.CrossEntropyLoss()
 
-    class_correct = torch.zeros(model.num_classes)
-    class_total = torch.zeros(model.num_classes)
+    num_classes = getattr(model, "num_classes", None)
+    if isinstance(num_classes, torch.Tensor):
+        num_classes = num_classes.item()  # Convert scalar Tensor to int
+    if not isinstance(num_classes, int):
+        raise AttributeError(
+            "The model must have an integer attribute 'num_classes' "
+            "representing the number of classes."
+        )
+
+    class_correct = torch.zeros(num_classes)
+    class_total = torch.zeros(num_classes)
 
     with torch.no_grad():
         for images, labels in test_loader:
@@ -51,7 +60,7 @@ def evaluate_model(
 
     # Calculate per-class accuracies
     class_accuracies = {}
-    for i in range(model.num_classes):
+    for i in range(num_classes):  # Use the validated integer num_classes
         if class_total[i] > 0:
             class_accuracies[f"class_{i}_accuracy"] = (
                 100.0 * class_correct[i].item() / class_total[i].item()

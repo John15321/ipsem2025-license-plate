@@ -42,7 +42,7 @@ def train_model(
 
     training_stats = []
     total_start_time = time.time()
-    peak_memory = 0
+    peak_memory = 0.0
 
     for epoch in range(epochs):
         epoch_start_time = time.time()
@@ -195,11 +195,11 @@ def train_hybrid_model(
     logger.info("Loading %s dataset from %s", dataset_type, dataset_path)
     try:
         if dataset_type.lower() == "emnist":
-            dataset = EMNISTDataset(root=dataset_path, train=True, download=True)
+            dataset = EMNISTDataset(root=dataset_path, train=True, download=True)  # type: ignore
         elif dataset_type.lower() == "mnist":
-            dataset = MNISTDataset(root=dataset_path, train=True, download=True)
+            dataset = MNISTDataset(root=dataset_path, train=True, download=True)  # type: ignore
         elif dataset_type.lower() == "custom":
-            dataset = CustomImageDataset(root=dataset_path)
+            dataset = CustomImageDataset(root=dataset_path)  # type: ignore
         else:
             raise ValueError("Unknown dataset type: %s", dataset_type)
     except Exception as e:
@@ -214,10 +214,19 @@ def train_hybrid_model(
         val_ratio=val_ratio,
         num_workers=4,
     )
+
+    # Log the sizes of the datasets
     logger.info(
-        "Created data loaders - Train: %d samples, Val: %d samples",
-        len(train_loader.dataset),
-        len(val_loader.dataset),
+        "Data loader sizes - Train: %d, Val: %d, Test: %d",
+        len(train_loader.dataset),  # type: ignore
+        len(val_loader.dataset),  # type: ignore
+        len(test_loader.dataset),  # type: ignore
+    )
+
+    logger.info(
+        "Created data loaders - Train: %d samples, Val: %d samples",  # type: ignore[arg-type]
+        len(train_loader.dataset),  # type: ignore[arg-type]
+        len(val_loader.dataset),  # type: ignore[arg-type]
     )
 
     # Create model
@@ -235,7 +244,7 @@ def train_hybrid_model(
     )
 
     # Convert stats file to Path if provided
-    if stats_file is not None:
+    if stats_file is not None and isinstance(stats_file, str):
         stats_file = Path(stats_file)
 
     # Train model

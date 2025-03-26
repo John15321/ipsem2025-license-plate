@@ -15,10 +15,20 @@ DEFAULT_LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 DEFAULT_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 DEFAULT_LOG_LEVEL = logging.INFO
 
+# Log levels mapping
+LOG_LEVELS = {
+    "CRITICAL": logging.CRITICAL,
+    "ERROR": logging.ERROR,
+    "WARNING": logging.WARNING,
+    "INFO": logging.INFO,
+    "DEBUG": logging.DEBUG,
+    "NOTSET": logging.NOTSET,
+}
+
 
 # pylint: disable=too-many-arguments,too-many-positional-arguments
 def configure_logging(
-    level: int = DEFAULT_LOG_LEVEL,
+    level: Union[int, str] = DEFAULT_LOG_LEVEL,  # Accept both int and str for level
     log_to_console: bool = True,
     log_to_file: bool = False,
     log_file: Optional[Union[str, Path]] = None,
@@ -30,7 +40,7 @@ def configure_logging(
     Configure the logging system for the package.
 
     Args:
-        level: The logging level (e.g., logging.INFO, logging.DEBUG)
+        level: The logging level (e.g., logging.INFO, logging.DEBUG, or their string equivalents)
         log_to_console: Whether to log to console (stdout)
         log_to_file: Whether to log to a file
         log_file: The log file path (if log_to_file is True). If None, a default path
@@ -39,6 +49,10 @@ def configure_logging(
         date_format: The format for timestamps
         loggers: List of specific logger names to configure. If None, configures the root logger.
     """
+    # Convert string log level to int if necessary
+    if isinstance(level, str):
+        level = LOG_LEVELS.get(level.upper(), DEFAULT_LOG_LEVEL)
+
     handlers = []
     formatter = logging.Formatter(fmt=log_format, datefmt=date_format)
 

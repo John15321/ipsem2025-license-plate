@@ -64,7 +64,7 @@ class EMNISTDataset(BaseDataset):
             logger.info(
                 "Initialized EMNISTDataset with %d/%d samples (36-class filtered)",
                 len(self.indices),
-                len(self._emnist),
+                len(self._emnist),  # type: ignore
             )
 
     @property
@@ -89,14 +89,20 @@ class EMNISTDataset(BaseDataset):
             transform=self.transform,
         )
 
-        # Filter indices to only include our 36 classes
+        # Ensure indices are correctly filtered and synchronized
         if not self.indices:
-            # This is a time-consuming operation, so we do it only once
             self.indices = [
                 i
                 for i, (_, label) in enumerate(self._emnist)
                 if label in self.label_map_36
             ]
+
+        # Log the number of filtered indices
+        logger.info(
+            "Filtered dataset to %d samples out of %d total samples",
+            len(self.indices),
+            len(self._emnist),
+        )
 
         logger.info(
             "EMNIST dataset loaded with %d/%d samples (36-class filtered)",
@@ -125,11 +131,29 @@ class EMNISTDataset(BaseDataset):
         """Get the total number of samples in the dataset."""
         if not self.indices:
             self._load_dataset()
+        if self._emnist is None:
+            self._load_dataset()
+        if self._emnist is None:
+            raise ValueError(
+                "The EMNIST dataset has not been loaded. Ensure it is "
+                "initialized before accessing its length."
+            )
+        # Return the length of filtered indices instead of the whole dataset
         return len(self.indices)
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int]:
         """Get a single sample from the dataset."""
         # Ensure dataset is loaded
+        if idx < 0 or idx >= len(self.indices):
+            logger.error(
+                "Index %d is out of range for dataset with %d samples. This may indicate a mismatch between the dataset and DataLoader.",  # pylint: disable=line-too-long
+                idx,
+                len(self.indices),
+            )
+            raise IndexError(
+                f"Index {idx} is out of range for dataset with {len(self.indices)} samples."
+            )
+
         actual_index = self.indices[idx]
         img, old_label = self.emnist[actual_index]
         new_label = self.label_map_36[old_label]  # map to [0..35]

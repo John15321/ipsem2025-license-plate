@@ -101,6 +101,9 @@ def train_command(
         logger.debug("  stats_file: %s", stats_file)
         logger.debug("  run_test: %s", run_test)
 
+        stats_file = Path(stats_file) if stats_file else None  # type: ignore
+        model_save_path = str(model_save_path) if model_save_path else None  # type: ignore
+
         result = train_hybrid_model(
             n_qubits=n_qubits,
             ansatz_reps=ansatz_reps,
@@ -112,7 +115,7 @@ def train_command(
             dataset_type=dataset_type,
             dataset_path=dataset_path,
             model_save_path=model_save_path,
-            stats_file=stats_file,
+            stats_file=stats_file,  # type: ignore
             log_file=log_file,
             run_test=run_test,
             verbose=verbose,
@@ -153,8 +156,8 @@ def test_command(
         configure_logging(level=log_level)
 
         # Load model
-        model_path = Path(model_path)
-        model, metadata = load_model(model_path)
+        model_path: Path = Path(model_path)  # type: ignore
+        model, metadata = load_model(model_path)  # type: ignore
         logger.info("Loaded model from %s", model_path)
         logger.info("Model metadata: %s", metadata)
 
@@ -165,13 +168,21 @@ def test_command(
 
         logger.info("Loading %s dataset from %s", dataset_type, dataset_path)
         if dataset_type.lower() == "emnist":
-            dataset = EMNISTDataset(root=dataset_path, train=False, download=True)
+            dataset = EMNISTDataset(root=dataset_path, train=False, download=True)  # type: ignore
         elif dataset_type.lower() == "mnist":
-            dataset = MNISTDataset(root=dataset_path, train=False, download=True)
+            dataset = MNISTDataset(root=dataset_path, train=False, download=True)  # type: ignore
         elif dataset_type.lower() == "custom":
-            dataset = CustomImageDataset(root=dataset_path)
+            dataset = CustomImageDataset(root=dataset_path)  # type: ignore
         else:
-            raise ValueError("Unknown dataset type: %s", dataset_type)
+            raise ValueError("Unknown dataset type: %s", dataset_type)  # type: ignore
+
+        logger.info("Dataset type: %s, Path: %s", dataset_type, dataset_path)
+
+        # Validate dataset initialization
+        if len(dataset) == 0:
+            raise ValueError(
+                "The dataset is empty. Please check the dataset path and filtering criteria."
+            )
 
         # Create test loader
         _, _, test_loader = dataset.create_data_loaders(
