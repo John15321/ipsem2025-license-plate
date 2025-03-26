@@ -18,6 +18,7 @@ qiskit-machine-learning = "^0.8.2"
 matplotlib = "^3.8.0"
 typer = "^0.9.0"
 rich = "^13.7.0"
+yolov5 = "^7.0.14"
 
 [tool.poetry.scripts]
 ipsem2025-train = "ipsem2025_license_plate.qnet.cli:main"
