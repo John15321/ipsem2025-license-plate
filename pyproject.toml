@@ -22,8 +22,8 @@ yolov5 = "^7.0.14"
 
 [tool.poetry.scripts]
 ipsem2025-train = "ipsem2025_license_plate.qnet.cli:main"
-ipsem2025 = "ipsem2025_license_plate.cli:main"
 ipsem2025-dataset = "ipsem2025_license_plate.datasets.cli:main"
+ipsem2025-plate-recognizer = "ipsem2025_license_plate.plate_extraction.detect:cli"
 
 [tool.poetry.group.format.dependencies]
 black = "^25.1.0"
