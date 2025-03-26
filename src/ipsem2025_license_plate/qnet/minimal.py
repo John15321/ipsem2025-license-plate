@@ -3,15 +3,20 @@
 Hybrid Quantum-Classical MNIST classifier using PyTorch and Qiskit.
 
 The network combines a classical CNN front-end with a quantum circuit middle layer,
-followed by a classical output layer. The quantum circuit uses n_qubits to process
+followed by a classical output layer. The quantum circuit uses n_qubits to process 
 features and outputs a 2^n_qubits dimensional vector.
-
-Usage:
-    ipsem2025-qnet train [--n-qubits N] [--ansatz-reps R] [--epochs E] [--batch-size B]
 """
 
 import sys
 from pathlib import Path
+import csv
+from datetime import datetime
+import time
+import platform
+import psutil
+import fcntl
+from typing import Optional, Dict, Any, Union
+import os
 
 import torch
 import torch.nn as nn
@@ -27,13 +32,44 @@ from qiskit.primitives import Sampler
 from qiskit_machine_learning.neural_networks import SamplerQNN
 from qiskit_machine_learning.connectors import TorchConnector
 
-# CLI setup
 app = typer.Typer(
     help="Hybrid Quantum-Classical Neural Network for MNIST",
     add_completion=False,
 )
 logger = get_logger(__name__)
 
+def get_hardware_info() -> Dict[str, str]:
+    """Collect system hardware information."""
+    return {
+        'cpu_model': platform.processor(),
+        'python_version': platform.python_version(),
+        'torch_version': torch.__version__,
+        'cuda_version': torch.version.cuda if torch.cuda.is_available() else 'N/A',
+        'total_memory': f"{psutil.virtual_memory().total / (1024**3):.1f}GB",
+        'cpu_count': str(psutil.cpu_count(logical=False)),
+        'cpu_threads': str(psutil.cpu_count(logical=True))
+    }
+
+def log_training_stats(stats_file: Path, stats: dict):
+    """Log training statistics to CSV file with file locking for safety."""
+    stats_file.parent.mkdir(parents=True, exist_ok=True)
+    
+    try:
+        with open(stats_file, mode='a', newline='') as f:
+            # Get an exclusive lock
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+            
+            writer = csv.DictWriter(f, fieldnames=list(stats.keys()))
+            if stats_file.stat().st_size == 0:  # Only write header for empty files
+                writer.writeheader()
+            writer.writerow(stats)
+            f.flush()  # Force write to disk
+            os.fsync(f.fileno())  # Ensure it's written to disk
+            
+            # Release the lock
+            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+    except Exception as e:
+        logger.error(f"Failed to write training stats: {e}")
 
 def calc_num_classes(n_qubits: int) -> int:
     """Calculate number of output classes based on qubit count, capped at 10."""
@@ -134,23 +170,35 @@ class HybridModel(nn.Module):
         return self.classifier(q_out)
 
 
-def train_model(model, train_loader, device="cpu", epochs=3):
+def train_model(model, train_loader, device="cpu", epochs=3, stats_file: Optional[Path] = None):
     """Train the hybrid model using cross entropy loss and Adam optimizer."""
     logger.info(f"Starting training for {epochs} epochs on {device}")
     
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
+    lr = 1e-3
     
     model.to(device)
     model.train()
     
+    # Track hardware info
+    hardware_info = get_hardware_info()
+    logger.info(f"Hardware info: {hardware_info}")
+    
+    training_stats = []
+    total_start_time = time.time()
+    peak_memory = 0  # Initialize peak memory tracker
+    
     for epoch in range(epochs):
+        epoch_start_time = time.time()
         logger.info(f"Starting epoch {epoch+1}/{epochs}")
+        
         total_loss = 0.0
         total_correct = 0
         total_samples = 0
         
         for batch_idx, (images, labels) in enumerate(train_loader):
+            batch_start_time = time.time()
             if batch_idx % 10 == 0:
                 logger.debug(f"Processing batch {batch_idx}/{len(train_loader)}")
                 
@@ -162,113 +210,178 @@ def train_model(model, train_loader, device="cpu", epochs=3):
             loss.backward()
             optimizer.step()
             
+            # Memory tracking
+            if device == "cuda":
+                current_memory = torch.cuda.memory_allocated() / 1024**2  # MB
+                peak_memory = max(peak_memory, current_memory)
+            
             total_loss += loss.item() * images.size(0)
             total_correct += (logits.argmax(dim=1) == labels).sum().item()
             total_samples += images.size(0)
+            
+            if batch_idx % 10 == 0:
+                batch_time = time.time() - batch_start_time
+                logger.debug(f"Batch {batch_idx} took {batch_time:.2f}s")
         
+        epoch_time = time.time() - epoch_start_time
         avg_loss = total_loss / total_samples
         accuracy = 100.0 * total_correct / total_samples
-        logger.info(f"Epoch {epoch+1}: Loss={avg_loss:.4f}, Accuracy={accuracy:.2f}%")
+        
+        # Collect and immediately save epoch statistics
+        epoch_stats = {
+            'timestamp': datetime.now().isoformat(),
+            'epoch': epoch + 1,
+            'loss': avg_loss,
+            'accuracy': accuracy,
+            'samples_processed': total_samples,
+            'epoch_time': epoch_time,
+            'total_time': time.time() - total_start_time,
+            'learning_rate': lr,
+            'cpu_memory_mb': psutil.Process().memory_info().rss / 1024**2,
+            'gpu_memory_mb': torch.cuda.memory_allocated() / 1024**2 if device == "cuda" else 0,
+            'batch_size': train_loader.batch_size,
+            **hardware_info
+        }
+        
+        training_stats.append(epoch_stats)
+        
+        # Immediately write epoch stats if stats_file is provided
+        if stats_file is not None:
+            log_training_stats(stats_file, epoch_stats)
+        
+        logger.info(
+            f"Epoch {epoch+1}: Loss={avg_loss:.4f}, Accuracy={accuracy:.2f}%, "
+            f"Time={epoch_time:.2f}s"
+        )
     
-    logger.info("Training complete")
+    logger.info(f"Training complete! Total time: {time.time() - total_start_time:.2f}s")
+    return training_stats
 
 
-# CLI implementation
-@app.command("train")
-def train_command(
-    n_qubits: int = typer.Option(
-        2,
-        "--n-qubits",
-        "-q",
-        help="Number of qubits to use"
-    ),
-    ansatz_reps: int = typer.Option(
-        1,
-        "--ansatz-reps",
-        "-r",
-        help="Depth (reps) of RealAmplitudes ansatz"
-    ),
-    epochs: int = typer.Option(
-        3,
-        "--epochs",
-        "-e",
-        help="Number of training epochs"
-    ),
-    batch_size: int = typer.Option(
-        32,
-        "--batch-size",
-        "-b",
-        help="Training batch size"
-    ),
-    log_file: str = typer.Option(
-        None,
-        "--log-file",
-        "-l",
-        help="Path to save log output (defaults to console only)"
-    ),
-    verbose: bool = typer.Option(
-        False,
-        "--verbose",
-        "-v",
-        help="Enable verbose output"
-    ),
-):
+def train_hybrid_model(
+    n_qubits: int = 2,
+    ansatz_reps: int = 1,
+    epochs: int = 3,
+    batch_size: int = 32,
+    learning_rate: float = 1e-3,
+    device: Optional[str] = None,
+    stats_file: Optional[Union[str, Path]] = None,
+    log_file: Optional[str] = None,
+    verbose: bool = False,
+) -> Dict[str, Any]:
     """
-    Train a hybrid quantum-classical neural network on MNIST digits.
+    Train the hybrid quantum-classical model on MNIST digits.
     
-    The number of digits used is determined by the number of qubits (min(2^n_qubits, 10)).
+    Args:
+        n_qubits: Number of qubits in quantum circuit
+        ansatz_reps: Number of repetitions in quantum ansatz
+        epochs: Number of training epochs
+        batch_size: Training batch size
+        learning_rate: Learning rate for Adam optimizer
+        device: Device to train on ('cuda' or 'cpu'), defaults to auto-detect
+        stats_file: Path to save training statistics CSV
+        log_file: Path to save log output
+        verbose: Enable verbose output
+        
+    Returns:
+        Dict containing:
+        - model: Trained HybridModel instance
+        - final_stats: Statistics from final epoch
+        - training_history: List of stats from all epochs
+        - hardware_info: System information
     """
     # Configure logging
     log_level = "DEBUG" if verbose else "INFO"
     configure_logging(
-        level=log_level, 
+        level=log_level,
         log_to_console=True,
         log_to_file=log_file is not None,
         log_file=log_file
     )
     
     logger.info("Starting hybrid quantum-classical MNIST training")
-    logger.info(f"Configuration: n_qubits={n_qubits}, ansatz_reps={ansatz_reps}, epochs={epochs}, batch_size={batch_size}")
     
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    # Setup device
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
     logger.info(f"Using device: {device}")
-
-    # Determine how many classes based on qubits
+    
+    # Collect hardware info
+    hw_info = get_hardware_info()
+    logger.info(f"Hardware info: {hw_info}")
+    
+    # Setup data
     num_classes = calc_num_classes(n_qubits)
-    digits = list(range(num_classes))  # e.g. [0,1] or [0,1,2,3], etc.
-    logger.info(f"Using {num_classes} classes (digits {digits})")
-
-    # Load subset of MNIST with these digits
-    logger.info("Loading MNIST dataset")
+    digits = list(range(num_classes))
+    
     train_data = get_mnist_subset(digits, train=True)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
-    logger.info(f"Dataset loaded with {len(train_data)} samples")
-
-    # Build model
-    logger.info("Building hybrid quantum-classical model")
+    logger.info(f"Dataset loaded: {len(train_data)} samples, {num_classes} classes")
+    
+    # Create model
     model = HybridModel(
-        n_qubits=n_qubits, 
+        n_qubits=n_qubits,
         ansatz_reps=ansatz_reps,
         num_classes=num_classes
     )
     
-    # Log model structure details
-    logger.debug(f"Model structure: Classical preprocessing (MNIST → {n_qubits} features) → " +
-                f"Quantum circuit ({n_qubits} qubits, {ansatz_reps} ansatz reps) → " +
-                f"Classical output layer ({2**n_qubits} → {num_classes})")
-
-    # Train model
-    train_model(model, train_loader, device=device, epochs=epochs)
+    # Convert stats_file to Path if provided
+    stats_path = Path(stats_file) if stats_file else None
     
-    logger.info("Training completed successfully")
-    return 0
+    # Train model with stats_file parameter
+    training_stats = train_model(
+        model, 
+        train_loader, 
+        device=device, 
+        epochs=epochs,
+        stats_file=stats_path
+    )
+    
+    return {
+        'model': model,
+        'final_stats': training_stats[-1] if training_stats else None,
+        'training_history': training_stats,
+        'hardware_info': hw_info
+    }
 
+@app.command("train")
+def train_command(
+    n_qubits: int = typer.Option(2, "--n-qubits", "-q", help="Number of qubits to use"),
+    ansatz_reps: int = typer.Option(1, "--ansatz-reps", "-r", help="Depth of RealAmplitudes ansatz"),
+    epochs: int = typer.Option(3, "--epochs", "-e", help="Number of training epochs"),
+    batch_size: int = typer.Option(32, "--batch-size", "-b", help="Training batch size"),
+    learning_rate: float = typer.Option(1e-3, "--learning-rate", "-l", help="Learning rate"),
+    stats_file: str = typer.Option(
+        "training_stats.csv",
+        "--stats-file",
+        "-s",
+        help="Path to save training statistics CSV"
+    ),
+    log_file: str = typer.Option(None, "--log-file", help="Path to save log output"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
+) -> int:
+    """Train a hybrid quantum-classical neural network on MNIST digits."""
+    try:
+        result = train_hybrid_model(
+            n_qubits=n_qubits,
+            ansatz_reps=ansatz_reps,
+            epochs=epochs,
+            batch_size=batch_size,
+            learning_rate=learning_rate,
+            stats_file=stats_file,
+            log_file=log_file,
+            verbose=verbose
+        )
+        logger.info("Training completed successfully")
+        return 0
+    except Exception as e:
+        logger.exception("Training failed")
+        return 1
 
 def main():
     """Main entry point for the quantum neural network CLI."""
     try:
         return app()
     except Exception as e:
-        logger.exception("An error occurred during execution")
+        logger.exception("An error occurred")
         return 1
-
