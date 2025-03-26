@@ -4,6 +4,24 @@
 
 IPSEM 2025 License Plate detection.
 
+# Features
+
+The package comes with several modules for license plate recognition:
+
+- **QNet**: Hybrid quantum-classical neural network for character recognition ([Documentation](src/ipsem2025_license_plate/qnet/README.md))
+  - Implements a hybrid quantum-classical neural network for license plate character recognition (0-9, A-Z)
+  - Provides both a CLI (`ipsem2025-train`) and Python API for model training and testing
+  - Supports customizable quantum circuit parameters and training configurations
+
+- **Datasets**: Flexible dataset management system for training models ([Documentation](src/ipsem2025_license_plate/datasets/README.md))
+  - Includes multiple dataset types (EMNIST, custom image datasets)
+  - Provides a comprehensive CLI tool (`ipsem2025-dataset`) for dataset operations
+  - Supports dataset downloading, validation, visualization, and information display
+  
+- **Utilities**: Various helper tools including logging utilities ([Documentation](src/ipsem2025_license_plate/utils/README.md))
+  - Configurable logging system with console and file support
+  - Type-safe interfaces and comprehensive error handling
+
 # Development
 
 ## Tools and local environment
