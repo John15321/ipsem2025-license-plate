@@ -1,5 +1,7 @@
 """Hybrid quantum-classical model definition."""
 
+# pylint: disable=too-many-instance-attributes,too-many-arguments,too-many-positional-arguments
+
 from typing import Dict, Optional
 
 import torch

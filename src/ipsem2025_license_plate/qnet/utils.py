@@ -1,3 +1,4 @@
+# pylint: disable=broad-exception-caught,unspecified-encoding,unused-import
 """Utility functions for quantum-classical hybrid model."""
 
 import csv
@@ -10,6 +11,7 @@ from typing import Any, Dict, Tuple
 
 import psutil
 import torch
+from torchvision import transforms
 
 from ..utils.logging_utils import get_logger
 from .model import HybridModel
@@ -80,3 +82,13 @@ def load_model(load_path: Path) -> Tuple[HybridModel, dict]:
 
     logger.info("Model loaded from %s", load_path)
     return model, metadata
+
+
+def get_default_transform() -> transforms.Compose:
+    """Return the default transformation pipeline for datasets."""
+    return transforms.Compose(
+        [
+            transforms.Resize((64, 64)),
+            transforms.ToTensor(),
+        ]
+    )

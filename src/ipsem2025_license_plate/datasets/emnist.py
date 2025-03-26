@@ -1,5 +1,7 @@
 """EMNIST dataset implementation."""
 
+# pylint: disable=too-many-instance-attributes,too-many-arguments,too-many-positional-arguments
+
 import os
 from typing import Any, Dict, List, Optional, Tuple
 

@@ -1,5 +1,7 @@
 """Custom dataset implementation for folder-based image datasets."""
 
+# pylint: disable=raise-missing-from
+
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -7,6 +9,7 @@ import torch
 from PIL import Image
 from torchvision import transforms
 
+from ..qnet.utils import get_default_transform
 from ..utils.logging_utils import get_logger
 from .base import BaseDataset
 
@@ -45,12 +48,7 @@ class CustomImageDataset(BaseDataset):
         self.root = Path(root)
 
         if transform is None:
-            transform = transforms.Compose(
-                [
-                    transforms.Resize((64, 64)),
-                    transforms.ToTensor(),
-                ]
-            )
+            transform = get_default_transform()
         self.transform = transform
 
         # Find all image files and build class mapping

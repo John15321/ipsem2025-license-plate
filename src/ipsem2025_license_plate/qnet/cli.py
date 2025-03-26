@@ -1,5 +1,7 @@
 """Command-line interface for quantum-classical hybrid model."""
 
+# pylint: disable=line-too-long,too-many-arguments,too-many-positional-arguments,too-many-locals,broad-exception-caught,f-string-without-interpolation,import-outside-toplevel,raising-format-tuple
+
 from pathlib import Path
 from typing import Optional
 

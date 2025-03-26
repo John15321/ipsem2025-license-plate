@@ -1,5 +1,7 @@
 """Testing and evaluation functionality for hybrid models."""
 
+# pylint: disable=too-many-locals
+
 from typing import Dict
 
 import torch

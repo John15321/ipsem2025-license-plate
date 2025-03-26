@@ -1,10 +1,13 @@
 """Base interface for all datasets used in the project."""
 
+# pylint: disable=duplicate-code
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Tuple
 
 import torch
 from torch.utils.data import DataLoader, Dataset
+
+from ..qnet.utils import get_default_transform
 
 
 class BaseDataset(Dataset, ABC):
@@ -73,6 +76,7 @@ class BaseDataset(Dataset, ABC):
             ValueError: If the dataset at the path is invalid or unsupported
         """
 
+    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
     def create_data_loaders(
         self,
         batch_size: int = 32,
@@ -117,3 +121,8 @@ class BaseDataset(Dataset, ABC):
         )
 
         return train_loader, val_loader, test_loader
+
+    def __init__(self, transform=None):
+        if transform is None:
+            transform = get_default_transform()
+        self.transform = transform

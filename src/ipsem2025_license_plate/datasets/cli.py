@@ -7,6 +7,8 @@ This module provides CLI commands for:
 4. Validating custom datasets
 """
 
+# pylint: disable=broad-exception-caught,unused-argument,too-many-locals
+
 import os
 import sys
 import traceback
