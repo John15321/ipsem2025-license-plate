@@ -68,14 +68,14 @@ def train_command(
 
         logger.info("Starting quantum-classical model training...")
         logger.debug("Training parameters:")
-        logger.debug(f"  n_qubits: {n_qubits}")
-        logger.debug(f"  ansatz_reps: {ansatz_reps}")
-        logger.debug(f"  epochs: {epochs}")
-        logger.debug(f"  batch_size: {batch_size}")
-        logger.debug(f"  dataset_type: {dataset_type}")
-        logger.debug(f"  model_save_path: {model_save_path}")
-        logger.debug(f"  stats_file: {stats_file}")
-        logger.debug(f"  run_test: {run_test}")
+        logger.debug("  n_qubits: %s", n_qubits)
+        logger.debug("  ansatz_reps: %s", ansatz_reps)
+        logger.debug("  epochs: %s", epochs)
+        logger.debug("  batch_size: %s", batch_size)
+        logger.debug("  dataset_type: %s", dataset_type)
+        logger.debug("  model_save_path: %s", model_save_path)
+        logger.debug("  stats_file: %s", stats_file)
+        logger.debug("  run_test: %s", run_test)
 
         result = train_hybrid_model(
             n_qubits=n_qubits,
@@ -94,7 +94,7 @@ def train_command(
         logger.info("Training completed successfully")
         if result["test_metrics"]:
             logger.info(
-                f"Test accuracy: {result['test_metrics']['test_accuracy']:.2f}%"
+                "Test accuracy: %.2f%%", result['test_metrics']['test_accuracy']
             )
         return 0
     except Exception as e:
@@ -129,15 +129,15 @@ def test_command(
         # Load model
         model_path = Path(model_path)
         model, metadata = load_model(model_path)
-        logger.info(f"Loaded model from {model_path}")
-        logger.info(f"Model metadata: {metadata}")
+        logger.info("Loaded model from %s", model_path)
+        logger.info("Model metadata: %s", metadata)
 
         # Load dataset
         from ..datasets.custom import CustomImageDataset
         from ..datasets.emnist import EMNISTDataset
         from ..datasets.mnist import MNISTDataset
 
-        logger.info(f"Loading {dataset_type} dataset from {dataset_path}")
+        logger.info("Loading %s dataset from %s", dataset_type, dataset_path)
         if dataset_type.lower() == "emnist":
             dataset = EMNISTDataset(root=dataset_path, train=False, download=True)
         elif dataset_type.lower() == "mnist":
@@ -145,7 +145,7 @@ def test_command(
         elif dataset_type.lower() == "custom":
             dataset = CustomImageDataset(root=dataset_path)
         else:
-            raise ValueError(f"Unknown dataset type: {dataset_type}")
+            raise ValueError("Unknown dataset type: %s", dataset_type)
 
         # Create test loader
         _, _, test_loader = dataset.create_data_loaders(
@@ -162,7 +162,7 @@ def test_command(
         # Log results
         logger.info("Test Results:")
         for name, value in metrics.items():
-            logger.info(f"{name}: {value:.2f}")
+            logger.info("%s: %.2f", name, value)
 
         return 0
 

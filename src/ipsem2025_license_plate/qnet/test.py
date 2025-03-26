@@ -58,6 +58,6 @@ def evaluate_model(
     metrics = {"test_loss": avg_loss, "test_accuracy": accuracy, **class_accuracies}
 
     logger.info(
-        f"Evaluation complete - Loss: {avg_loss:.4f}, Accuracy: {accuracy:.2f}%"
+        "Evaluation complete - Loss: %.4f, Accuracy: %.2f%%", avg_loss, accuracy
     )
     return metrics

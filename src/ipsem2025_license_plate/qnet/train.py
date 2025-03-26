@@ -22,7 +22,7 @@ def train_model(
     model, train_loader, device="cpu", epochs=3, stats_file: Optional[Path] = None
 ):
     """Train the hybrid model using cross entropy loss and Adam optimizer."""
-    logger.info(f"Starting training for {epochs} epochs on {device}")
+    logger.info("Starting training for %s epochs on %s", epochs, device)
 
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
@@ -33,7 +33,7 @@ def train_model(
 
     # Track hardware info
     hardware_info = get_hardware_info()
-    logger.info(f"Hardware info: {hardware_info}")
+    logger.info("Hardware info: %s", hardware_info)
 
     training_stats = []
     total_start_time = time.time()
@@ -41,7 +41,7 @@ def train_model(
 
     for epoch in range(epochs):
         epoch_start_time = time.time()
-        logger.info(f"Starting epoch {epoch+1}/{epochs}")
+        logger.info("Starting epoch %d/%d", epoch+1, epochs)
 
         total_loss = 0.0
         total_correct = 0
@@ -72,9 +72,8 @@ def train_model(
                 current_loss = total_loss / total_samples
                 current_acc = 100.0 * total_correct / total_samples
                 logger.info(
-                    f"Epoch {epoch+1} [{batch_idx}/{batch_count}] "
-                    f"Loss: {current_loss:.4f} "
-                    f"Acc: {current_acc:.1f}%"
+                    "Epoch %d [%d/%d] Loss: %.4f Acc: %.1f%%",
+                    epoch+1, batch_idx, batch_count, current_loss, current_acc
                 )
 
         epoch_time = time.time() - epoch_start_time
@@ -83,9 +82,8 @@ def train_model(
 
         # Log epoch summary
         logger.info(
-            f"Epoch {epoch+1}/{epochs} completed in {epoch_time:.2f}s - "
-            f"Loss: {avg_loss:.4f}, Accuracy: {accuracy:.2f}%, "
-            f"Memory: {peak_memory:.1f}MB"
+            "Epoch %d/%d completed in %.2fs - Loss: %.4f, Accuracy: %.2f%%, Memory: %.1fMB",
+            epoch+1, epochs, epoch_time, avg_loss, accuracy, peak_memory
         )
 
         # Collect and immediately save epoch statistics
@@ -114,8 +112,8 @@ def train_model(
 
     total_time = time.time() - total_start_time
     logger.info(
-        f"Training complete! Total time: {total_time:.2f}s, "
-        f"Final accuracy: {accuracy:.2f}%"
+        "Training complete! Total time: %.2fs, Final accuracy: %.2f%%",
+        total_time, accuracy
     )
     return training_stats
 
@@ -139,14 +137,14 @@ def train_hybrid_model(
     # Select device
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
-    logger.info(f"Using device: {device}")
+    logger.info("Using device: %s", device)
 
     from ..datasets.custom import CustomImageDataset
     from ..datasets.emnist import EMNISTDataset
     from ..datasets.mnist import MNISTDataset
 
     # Load appropriate dataset
-    logger.info(f"Loading {dataset_type} dataset from {dataset_path}")
+    logger.info("Loading %s dataset from %s", dataset_type, dataset_path)
     if dataset_type.lower() == "emnist":
         dataset = EMNISTDataset(root=dataset_path, train=True, download=True)
     elif dataset_type.lower() == "mnist":
@@ -154,25 +152,27 @@ def train_hybrid_model(
     elif dataset_type.lower() == "custom":
         dataset = CustomImageDataset(root=dataset_path)
     else:
-        raise ValueError(f"Unknown dataset type: {dataset_type}")
+        raise ValueError("Unknown dataset type: %s", dataset_type)
 
     # Create data loaders
     logger.info("Creating data loaders...")
     train_loader, val_loader, test_loader = dataset.create_data_loaders(
         batch_size=batch_size, train_ratio=0.7, val_ratio=0.15, num_workers=4
     )
-    logger.info(f"Created data loaders - Train: {len(train_loader.dataset)} samples")
+    logger.info("Created data loaders - Train: %d samples", len(train_loader.dataset))
 
     # Create model
     num_classes = dataset.get_num_classes()
     logger.info(
-        f"Creating hybrid model with {n_qubits} qubits, {ansatz_reps} ansatz repetitions"
+        "Creating hybrid model with %d qubits, %d ansatz repetitions",
+        n_qubits, ansatz_reps
     )
     model = HybridModel(
         n_qubits=n_qubits, ansatz_reps=ansatz_reps, num_classes=num_classes
     )
     logger.info(
-        f"Model created with {sum(p.numel() for p in model.parameters())} parameters"
+        "Model created with %d parameters",
+        sum(p.numel() for p in model.parameters())
     )
 
     # Convert stats file to Path if provided

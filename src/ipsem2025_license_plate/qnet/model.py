@@ -26,7 +26,10 @@ class HybridModel(nn.Module):
     def __init__(self, n_qubits=2, ansatz_reps=1, num_classes=2):
         super().__init__()
         logger.info(
-            f"Initializing HybridModel with {n_qubits} qubits, {ansatz_reps} ansatz reps"
+            "Initializing HybridModel with %s qubits, %s ansatz reps, and %d number of classes",
+            n_qubits,
+            ansatz_reps,
+            num_classes
         )
 
         self.n_qubits = n_qubits
@@ -61,11 +64,13 @@ class HybridModel(nn.Module):
         )
 
         # Quantum circuit setup
-        logger.debug(f"Creating quantum feature map with {n_qubits} qubits")
+        logger.debug("Creating quantum feature map with %s qubits", n_qubits)
         self.feature_map = ZZFeatureMap(feature_dimension=n_qubits)
 
         logger.debug(
-            f"Creating RealAmplitudes ansatz with {n_qubits} qubits, {ansatz_reps} repetitions"
+            "Creating RealAmplitudes ansatz with %s qubits, %s repetitions",
+            n_qubits,
+            ansatz_reps
         )
         self.ansatz = RealAmplitudes(num_qubits=n_qubits, reps=ansatz_reps)
         circuit = self.feature_map.compose(self.ansatz)
@@ -82,7 +87,7 @@ class HybridModel(nn.Module):
         self.quantum_layer = TorchConnector(self.qnn)
 
         # Final classification layer
-        logger.debug(f"Creating final classifier layer: {2**n_qubits} -> {num_classes}")
+        logger.debug("Creating final classifier layer: %s -> %s", 2**n_qubits, num_classes)
         self.classifier = nn.Linear(2**n_qubits, num_classes)
 
         logger.info("Model initialization complete")

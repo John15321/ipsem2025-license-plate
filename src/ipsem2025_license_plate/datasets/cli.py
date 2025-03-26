@@ -9,6 +9,7 @@ This module provides CLI commands for:
 
 import os
 import sys
+import traceback
 from pathlib import Path
 from typing import Optional
 
@@ -70,33 +71,24 @@ def auto_detect_dataset_type(path: str) -> str:
 
 
 def load_dataset(path: str, dataset_type: str = "auto") -> Optional[BaseDataset]:
-    """Load a dataset based on its type.
-
-    Args:
-        path: Path to the dataset
-        dataset_type: Type of dataset ("emnist", "custom", or "auto")
-
-    Returns:
-        Loaded dataset or None if loading failed
-    """
+    """Load a dataset based on its type."""
     try:
         if dataset_type == "auto":
             dataset_type = auto_detect_dataset_type(path)
             console.print(f"Auto-detected dataset type: [bold]{dataset_type}[/bold]")
 
         if dataset_type == "emnist":
-            # Use lazy loading for faster operations
             return EMNISTDataset(root=path, download=False, lazy_load=True)
 
-        elif dataset_type == "custom":
+        if dataset_type == "custom":
             return CustomImageDataset(root=path)
 
-        else:
-            console.print("[bold red]Unknown or undetected dataset type[/bold red]")
-            return None
+        console.print("[bold red]Unknown or undetected dataset type[/bold red]")
+        return None
 
-    except Exception as e:
-        console.print(f"[bold red]Error loading dataset:[/bold red] {e}")
+    except Exception as exc:
+        console.print(f"[bold red]Error loading dataset:[/bold red] {exc}")
+        logger.error("Failed to load dataset: %s", exc)
         return None
 
 
@@ -189,21 +181,19 @@ def download_dataset(
 
             return 0
 
-        elif dataset_name.lower() == "custom":
+        if dataset_name.lower() == "custom":
             console.print(
                 "[bold yellow]Custom dataset download is not supported.[/bold yellow] "
                 "Please use a local directory with class folders."
             )
             return 1
 
-        else:
-            console.print(f"[bold red]Unknown dataset type:[/bold red] {dataset_name}")
-            return 1
+        console.print(f"[bold red]Unknown dataset type:[/bold red] {dataset_name}")
+        return 1
 
-    except Exception as e:
-        console.print(f"[bold red]Error downloading dataset:[/bold red] {e}")
-        import traceback
-
+    except Exception as exc:
+        console.print(f"[bold red]Error downloading dataset:[/bold red] {exc}")
+        logger.error("Error downloading dataset: %s", exc)
         if verbose:
             console.print(traceback.format_exc())
         return 1
@@ -269,19 +259,7 @@ def info_command(
     console.print(table)
 
     # Calculate class distribution
-    with Progress(
-        TextColumn("[bold blue]{task.description}"),
-        BarColumn(),
-        TaskProgressColumn(),
-        console=console,
-    ) as progress:
-        task = progress.add_task("Calculating class distribution...", total=num_samples)
-
-        class_counts = {}
-        for i in range(num_samples):
-            _, label = dataset[i]
-            class_counts[label] = class_counts.get(label, 0) + 1
-            progress.update(task, advance=1)
+    class_counts = calculate_class_distribution(dataset, num_samples)
 
     # Display class distribution in a table
     table = Table(title="Class Distribution")
@@ -301,13 +279,41 @@ def info_command(
     console.print(
         Panel(
             "Try previewing samples from this dataset:\n"
-            f"[bold]ipsem2025-dataset preview --dataset-path {dataset_path} --num-samples 8[/bold]",
+            f"[bold]ipsem2025-dataset preview --dataset-path {dataset_path} "
+            f"--num-samples 8[/bold]",
             title="Next Steps",
             expand=False,
         )
     )
 
     return 0
+
+
+def calculate_class_distribution(dataset, num_samples):
+    """Calculate the distribution of classes in the dataset.
+    
+    Args:
+        dataset: The dataset to analyze
+        num_samples: Number of samples in the dataset
+        
+    Returns:
+        Dictionary mapping class labels to counts
+    """
+    with Progress(
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Calculating class distribution...", total=num_samples)
+
+        class_counts = {}
+        for i in range(num_samples):
+            _, label = dataset[i]
+            class_counts[label] = class_counts.get(label, 0) + 1
+            progress.update(task, advance=1)
+            
+    return class_counts
 
 
 @app.command("preview")
@@ -381,7 +387,8 @@ def preview_command(
 
     # Set title for the figure
     fig.suptitle(
-        f"Dataset Preview: {dataset.__class__.__name__} ({len(dataset)} samples, {dataset.get_num_classes()} classes)",
+        f"Dataset Preview: {dataset.__class__.__name__} ({len(dataset)} samples, "
+        f"{dataset.get_num_classes()} classes)",
         fontsize=14,
     )
 
@@ -495,30 +502,31 @@ def validate_command(
             f"Supported formats: {', '.join(valid_extensions)}"
         )
         return 1
-    else:
-        console.print(
-            "[bold green]Dataset validation successful: no issues found[/bold green]"
-        )
 
-        # Suggest next steps
-        console.print(
-            Panel(
-                "Your custom dataset looks good! Try previewing it:\n"
-                f"[bold]ipsem2025-dataset preview --dataset-path {dataset_path}[/bold]",
-                title="Next Steps",
-                expand=False,
-            )
-        )
+    console.print(
+        "[bold green]Dataset validation successful: no issues found[/bold green]"
+    )
 
-        return 0
+    # Suggest next steps
+    console.print(
+        Panel(
+            "Your custom dataset looks good! Try previewing it:\n"
+            f"[bold]ipsem2025-dataset preview --dataset-path {dataset_path}[/bold]",
+            title="Next Steps",
+            expand=False,
+        )
+    )
+
+    return 0
 
 
 def main():
     """Main entry point for the dataset CLI."""
     try:
         return app()
-    except Exception as e:
-        console.print(f"[bold red]Error:[/bold red] {e}")
+    except Exception as exc:
+        console.print(f"[bold red]Error:[/bold red] {exc}")
+        logger.error("Unhandled exception in CLI: %s", exc)
         return 1
 
 

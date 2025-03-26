@@ -49,7 +49,7 @@ def log_training_stats(stats_file: Path, stats: dict):
             # Release the lock
             fcntl.flock(f.fileno(), fcntl.LOCK_UN)
     except Exception as e:
-        logger.error(f"Failed to write training stats: {e}")
+        logger.error("Failed to write training stats: %s", e)
 
 
 def save_model(model: HybridModel, save_path: Path, metadata: dict):
@@ -61,7 +61,7 @@ def save_model(model: HybridModel, save_path: Path, metadata: dict):
 
     with open(save_path, "wb") as f:
         pickle.dump(model_data, f)
-    logger.info(f"Model saved to {save_path}")
+    logger.info("Model saved to %s", save_path)
 
 
 def load_model(load_path: Path) -> Tuple[HybridModel, dict]:
@@ -78,5 +78,5 @@ def load_model(load_path: Path) -> Tuple[HybridModel, dict]:
     )
     model.load_state_dict(model_data["state_dict"])
 
-    logger.info(f"Model loaded from {load_path}")
+    logger.info("Model loaded from %s", load_path)
     return model, metadata
