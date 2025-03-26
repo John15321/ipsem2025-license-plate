@@ -41,7 +41,7 @@ def train_model(
 
     for epoch in range(epochs):
         epoch_start_time = time.time()
-        logger.info("Starting epoch %d/%d", epoch+1, epochs)
+        logger.info("Starting epoch %d/%d", epoch + 1, epochs)
 
         total_loss = 0.0
         total_correct = 0
@@ -73,7 +73,11 @@ def train_model(
                 current_acc = 100.0 * total_correct / total_samples
                 logger.info(
                     "Epoch %d [%d/%d] Loss: %.4f Acc: %.1f%%",
-                    epoch+1, batch_idx, batch_count, current_loss, current_acc
+                    epoch + 1,
+                    batch_idx,
+                    batch_count,
+                    current_loss,
+                    current_acc,
                 )
 
         epoch_time = time.time() - epoch_start_time
@@ -83,7 +87,12 @@ def train_model(
         # Log epoch summary
         logger.info(
             "Epoch %d/%d completed in %.2fs - Loss: %.4f, Accuracy: %.2f%%, Memory: %.1fMB",
-            epoch+1, epochs, epoch_time, avg_loss, accuracy, peak_memory
+            epoch + 1,
+            epochs,
+            epoch_time,
+            avg_loss,
+            accuracy,
+            peak_memory,
         )
 
         # Collect and immediately save epoch statistics
@@ -113,7 +122,8 @@ def train_model(
     total_time = time.time() - total_start_time
     logger.info(
         "Training complete! Total time: %.2fs, Final accuracy: %.2f%%",
-        total_time, accuracy
+        total_time,
+        accuracy,
     )
     return training_stats
 
@@ -165,14 +175,14 @@ def train_hybrid_model(
     num_classes = dataset.get_num_classes()
     logger.info(
         "Creating hybrid model with %d qubits, %d ansatz repetitions",
-        n_qubits, ansatz_reps
+        n_qubits,
+        ansatz_reps,
     )
     model = HybridModel(
         n_qubits=n_qubits, ansatz_reps=ansatz_reps, num_classes=num_classes
     )
     logger.info(
-        "Model created with %d parameters",
-        sum(p.numel() for p in model.parameters())
+        "Model created with %d parameters", sum(p.numel() for p in model.parameters())
     )
 
     # Convert stats file to Path if provided

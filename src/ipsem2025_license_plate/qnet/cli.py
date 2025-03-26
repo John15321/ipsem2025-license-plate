@@ -94,7 +94,7 @@ def train_command(
         logger.info("Training completed successfully")
         if result["test_metrics"]:
             logger.info(
-                "Test accuracy: %.2f%%", result['test_metrics']['test_accuracy']
+                "Test accuracy: %.2f%%", result["test_metrics"]["test_accuracy"]
             )
         return 0
     except Exception as e:

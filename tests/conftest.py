@@ -15,6 +15,7 @@ from ipsem2025_license_plate.utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
 
+
 # pylint: disable=redefined-outer-name
 @pytest.fixture(scope="session")
 def global_temp_dir(tmp_path_factory):
@@ -25,6 +26,7 @@ def global_temp_dir(tmp_path_factory):
     # Optional cleanup after all tests complete
     # shutil.rmtree(temp_dir)
 
+
 # pylint: disable=redefined-outer-name
 @pytest.fixture(scope="session")
 def emnist_dataset_root(global_temp_dir):
@@ -33,6 +35,7 @@ def emnist_dataset_root(global_temp_dir):
     root.mkdir(exist_ok=True)
     logger.info("Created EMNIST dataset root at: %s", root)
     return root
+
 
 # pylint: disable=redefined-outer-name
 @pytest.fixture(scope="session")
@@ -47,6 +50,7 @@ def emnist_downloaded_dataset(emnist_dataset_root):
     dataset = EMNISTDataset(root=str(emnist_dataset_root), download=True)
     logger.info("EMNIST dataset downloaded successfully with %d samples", len(dataset))
     return dataset
+
 
 # pylint: disable=redefined-outer-name
 @pytest.fixture(scope="session")

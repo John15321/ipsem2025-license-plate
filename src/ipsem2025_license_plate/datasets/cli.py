@@ -291,11 +291,11 @@ def info_command(
 
 def calculate_class_distribution(dataset, num_samples):
     """Calculate the distribution of classes in the dataset.
-    
+
     Args:
         dataset: The dataset to analyze
         num_samples: Number of samples in the dataset
-        
+
     Returns:
         Dictionary mapping class labels to counts
     """
@@ -312,7 +312,7 @@ def calculate_class_distribution(dataset, num_samples):
             _, label = dataset[i]
             class_counts[label] = class_counts.get(label, 0) + 1
             progress.update(task, advance=1)
-            
+
     return class_counts
 
 
