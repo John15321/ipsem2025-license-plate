@@ -1,6 +1,5 @@
 """Hybrid quantum-classical model definition."""
 
-import torch
 import torch.nn as nn
 from qiskit.circuit.library import RealAmplitudes, ZZFeatureMap
 from qiskit.primitives import Sampler

@@ -91,10 +91,4 @@ The training process records detailed statistics in CSV format:
 - Training time and memory usage
 - Hardware information
 - Model parameters
-
-Example stats file content:
-```csv
-timestamp,epoch,loss,accuracy,samples_processed,epoch_time,total_time,learning_rate,cpu_memory_mb,gpu_memory_mb
-2024-02-20T10:15:30,1,2.1543,45.67,1000,120.5,120.5,0.001,1024.5,512.3
-2024-02-20T10:17:30,2,1.8765,62.34,1000,119.8,240.3,0.001,1025.1,512.3
-```
+- etc.

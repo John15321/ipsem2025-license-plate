@@ -10,7 +10,7 @@ This module provides CLI commands for:
 import os
 import sys
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Optional
 
 import matplotlib.pyplot as plt
 import torch
@@ -25,7 +25,6 @@ from rich.progress import (
     TextColumn,
 )
 from rich.table import Table
-from torchvision import transforms
 
 from ..utils.logging_utils import configure_logging, get_logger
 from .base import BaseDataset

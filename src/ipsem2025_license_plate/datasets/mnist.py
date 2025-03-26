@@ -1,9 +1,10 @@
 """MNIST dataset implementation."""
 
+import os
 from typing import Any, Dict, Optional, Tuple
 
 import torch
-from torchvision import datasets, transforms
+from torchvision import transforms, datasets
 
 from ..utils.logging_utils import get_logger
 from .base import BaseDataset
@@ -12,7 +13,7 @@ logger = get_logger(__name__)
 
 
 class MNISTDataset(BaseDataset):
-    """MNIST dataset wrapper implementing BaseDataset interface."""
+    """MNIST dataset filtered to digits only."""
 
     def __init__(
         self,
@@ -21,42 +22,40 @@ class MNISTDataset(BaseDataset):
         transform: Optional[transforms.Compose] = None,
         download: bool = True,
     ):
-        """Initialize the MNIST dataset.
-
-        Args:
-            root: Root directory for dataset storage
-            train: Whether to load training or test set
-            transform: Optional transform to apply to images
-            download: Whether to download the dataset if not found
-        """
         super().__init__()
         self.root = root
         self.train = train
-        self.download = download
 
         if transform is None:
-            transform = transforms.Compose([
-                transforms.Resize((64, 64)),
-                transforms.ToTensor(),
-            ])
+            transform = transforms.Compose(
+                [
+                    transforms.Resize((64, 64)),
+                    transforms.ToTensor(),
+                ]
+            )
         self.transform = transform
 
-        logger.info("Loading MNIST dataset")
+        # Load MNIST dataset
         self.dataset = datasets.MNIST(
             root=root,
             train=train,
+            transform=transform,
             download=download,
-            transform=transform
         )
-        logger.info(f"Loaded MNIST dataset with {len(self.dataset)} samples")
+
+        logger.info(
+            "Initialized MNISTDataset with %d samples (digits 0-9)",
+            len(self.dataset),
+        )
 
     def get_image_dimensions(self) -> Tuple[int, int, int]:
         """Get the dimensions of images in the dataset."""
-        return (1, 64, 64)  # Grayscale 64x64 after resize
+        # MNIST images are grayscale 64x64 after our transform
+        return (1, 64, 64)
 
     def get_num_classes(self) -> int:
         """Get the number of classes in the dataset."""
-        return 10  # MNIST has 10 classes (0-9)
+        return 10  # digits 0-9
 
     def get_class_mapping(self) -> Dict[int, str]:
         """Get the mapping from class indices to class names."""
@@ -68,8 +67,7 @@ class MNISTDataset(BaseDataset):
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int]:
         """Get a single sample from the dataset."""
-        img, label = self.dataset[idx]
-        return img, label
+        return self.dataset[idx]
 
     @classmethod
     def from_path(cls, path: str, **kwargs: Any) -> "MNISTDataset":
@@ -78,7 +76,41 @@ class MNISTDataset(BaseDataset):
 
     @staticmethod
     def exists_at_path(path: str) -> bool:
-        """Check if a MNIST dataset exists at the given path."""
-        import os
+        """Check if a MNIST dataset exists at the given path.
+        
+        Args:
+            path: Path to check for dataset files
+            
+        Returns:
+            True if dataset files exist, False otherwise
+        """
+        # Check for the processed files that indicate a downloaded dataset
+        raw_folder = os.path.join(path, "MNIST", "raw")
         processed_folder = os.path.join(path, "MNIST", "processed")
-        return os.path.exists(processed_folder) and len(os.listdir(processed_folder)) > 0
+        
+        if not os.path.exists(raw_folder) or not os.path.exists(processed_folder):
+            return False
+        
+        # Check for raw MNIST files
+        raw_files = [
+            "train-images-idx3-ubyte",
+            "train-labels-idx1-ubyte",
+            "t10k-images-idx3-ubyte",
+            "t10k-labels-idx1-ubyte",
+        ]
+        
+        for file in raw_files:
+            if not os.path.exists(os.path.join(raw_folder, file)):
+                return False
+                
+        # Check for processed files
+        processed_files = [
+            "training.pt",
+            "test.pt",
+        ]
+        
+        for file in processed_files:
+            if not os.path.exists(os.path.join(processed_folder, file)):
+                return False
+                
+        return True

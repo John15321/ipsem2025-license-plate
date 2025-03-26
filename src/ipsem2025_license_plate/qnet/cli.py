@@ -1,6 +1,5 @@
 """Command-line interface for quantum-classical hybrid model."""
 
-import sys
 from pathlib import Path
 from typing import Optional
 

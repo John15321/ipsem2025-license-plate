@@ -5,12 +5,9 @@ This module provides fixtures that are automatically available to all test modul
 It focuses on resource-intensive fixtures like datasets that should be reused across tests.
 """
 
-import os
-import shutil
-from pathlib import Path
+# pylint: disable=redefined-outer-name
 
 import pytest
-import torch
 from torchvision import transforms
 
 from ipsem2025_license_plate.datasets.emnist import EMNISTDataset
@@ -18,7 +15,7 @@ from ipsem2025_license_plate.utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
 
-
+# pylint: disable=redefined-outer-name
 @pytest.fixture(scope="session")
 def global_temp_dir(tmp_path_factory):
     """Create a temporary directory that persists across all tests."""
@@ -28,7 +25,7 @@ def global_temp_dir(tmp_path_factory):
     # Optional cleanup after all tests complete
     # shutil.rmtree(temp_dir)
 
-
+# pylint: disable=redefined-outer-name
 @pytest.fixture(scope="session")
 def emnist_dataset_root(global_temp_dir):
     """Create a temporary directory for EMNIST dataset storage that persists across all tests."""
@@ -37,7 +34,7 @@ def emnist_dataset_root(global_temp_dir):
     logger.info("Created EMNIST dataset root at: %s", root)
     return root
 
-
+# pylint: disable=redefined-outer-name
 @pytest.fixture(scope="session")
 def emnist_downloaded_dataset(emnist_dataset_root):
     """
@@ -51,7 +48,7 @@ def emnist_downloaded_dataset(emnist_dataset_root):
     logger.info("EMNIST dataset downloaded successfully with %d samples", len(dataset))
     return dataset
 
-
+# pylint: disable=redefined-outer-name
 @pytest.fixture(scope="session")
 def emnist_transform():
     """Default transform for EMNIST dataset tests."""

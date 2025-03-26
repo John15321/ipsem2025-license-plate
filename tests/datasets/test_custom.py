@@ -13,9 +13,6 @@ Passing tests confirm reliable handling of user-provided image collections
 with proper error handling and memory efficiency.
 """
 
-import os
-from pathlib import Path
-
 import pytest
 import torch
 from PIL import Image

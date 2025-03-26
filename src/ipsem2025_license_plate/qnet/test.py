@@ -1,6 +1,6 @@
 """Testing and evaluation functionality for hybrid models."""
 
-from typing import Dict, Tuple
+from typing import Dict
 
 import torch
 import torch.nn as nn
