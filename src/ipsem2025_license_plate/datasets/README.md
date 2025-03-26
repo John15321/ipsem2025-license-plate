@@ -121,7 +121,6 @@ ipsem2025-dataset validate --dataset-path ./my_custom_data
 
 Options:
 - `--dataset-path, -p`: Path to the dataset to validate (required)
-- `--fix, -f`: Attempt to fix common issues
 - `--verbose, -v`: Enable verbose output
 
 This command checks:
