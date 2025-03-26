@@ -9,7 +9,6 @@ This module provides CLI commands for:
 
 import os
 import sys
-import logging
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -118,33 +117,20 @@ def download_dataset(
         "-f",
         help="Force re-download even if dataset exists"
     ),
-    log_file: Optional[str] = typer.Option(
-        None,
-        "--log-file",
-        help="Path to log file. If not specified, logs to console only"
-    ),
-    log_level: str = typer.Option(
-        "INFO",
-        "--log-level",
-        "-l",
-        help="Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)"
-    ),
     verbose: bool = typer.Option(
         False,
         "--verbose",
         "-v",
-        help="Enable verbose output (same as --log-level DEBUG)"
+        help="Enable verbose output"
     ),
 ):
-    """Download a dataset for license plate character recognition."""
-    # Configure logging based on options
-    level = logging.DEBUG if verbose else getattr(logging, log_level.upper())
-    configure_logging(
-        level=level,
-        log_to_console=True,
-        log_to_file=bool(log_file),
-        log_file=log_file
-    )
+    """Download a dataset for license plate character recognition.
+    
+    Currently supports EMNIST dataset (36 classes: 0-9, A-Z).
+    """
+    # Configure logging - use log_level instead of verbose
+    log_level = "DEBUG" if verbose else "INFO"
+    configure_logging(level=log_level)
     
     console.print(f"Downloading [bold]{dataset_name}[/bold] dataset to [bold]{output_dir}[/bold]")
     
@@ -236,17 +222,6 @@ def info_command(
         "-t",
         help="Type of dataset",
     ),
-    log_file: Optional[str] = typer.Option(
-        None,
-        "--log-file",
-        help="Path to log file. If not specified, logs to console only"
-    ),
-    log_level: str = typer.Option(
-        "INFO",
-        "--log-level",
-        "-l",
-        help="Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)"
-    ),
     verbose: bool = typer.Option(
         False,
         "--verbose",
@@ -254,14 +229,16 @@ def info_command(
         help="Enable verbose output"
     ),
 ):
-    """Display information about a dataset."""
-    # Configure logging based on options
-    configure_logging(
-        level=logging.DEBUG if verbose else getattr(logging, log_level.upper()),
-        log_to_console=True,
-        log_to_file=bool(log_file),
-        log_file=log_file
-    )
+    """Display information about a dataset.
+    
+    Shows details such as:
+    - Number of samples and classes
+    - Class mapping and distribution
+    - Image dimensions
+    """
+    # Configure logging - use log_level instead of verbose
+    log_level = "DEBUG" if verbose else "INFO"
+    configure_logging(level=log_level)
     
     dataset = load_dataset(dataset_path, dataset_type)
     if dataset is None:
@@ -447,16 +424,6 @@ def validate_command(
         "-p",
         help="Path to the dataset to validate"
     ),
-    log_file: Optional[str] = typer.Option(
-        None,
-        "--log-file",
-        help="Path to log file. If not specified, logs to console only"
-    ),
-    log_level: str = typer.Option(
-        "INFO",
-        "--log-level",
-        help="Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)"
-    ),
     verbose: bool = typer.Option(
         False,
         "--verbose",
@@ -464,14 +431,13 @@ def validate_command(
         help="Enable verbose output"
     ),
 ):
-    """Validate a custom dataset structure."""
-    # Configure logging based on options
-    configure_logging(
-        level=logging.DEBUG if verbose else getattr(logging, log_level.upper()),
-        log_to_console=True,
-        log_to_file=bool(log_file),
-        log_file=log_file
-    )
+    """Validate a custom dataset structure.
+    
+    Checks if the dataset follows the expected structure and reports any issues.
+    """
+    # Configure logging - use log_level instead of verbose
+    log_level = "DEBUG" if verbose else "INFO"
+    configure_logging(level=log_level)
     
     console.print(f"Validating custom dataset at [bold]{dataset_path}[/bold]")
     
