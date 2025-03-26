@@ -200,9 +200,12 @@ def test_from_path(mnist_dataset_root, mnist_downloaded_dataset):
     logger.info("Dataset creation from path test passed with %d samples", len(dataset))
 
 
-def test_exists_at_path(mnist_dataset_root, mnist_downloaded_dataset):
+def test_exists_at_path(mnist_dataset_root):
     """Test exists_at_path static method."""
     logger.info("Testing exists_at_path functionality...")
+
+    # First ensure dataset exists by creating an instance
+    _ = MNISTDataset(root=str(mnist_dataset_root), download=True)
 
     # Test with existing dataset
     assert MNISTDataset.exists_at_path(str(mnist_dataset_root))

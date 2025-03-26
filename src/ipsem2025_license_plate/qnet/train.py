@@ -7,8 +7,8 @@ from typing import Any, Dict, Optional
 
 import psutil
 import torch
-import torch.nn as nn
-import torch.optim as optim
+from torch import nn
+from torch import optim
 
 from ..utils.logging_utils import get_logger
 from .model import HybridModel
@@ -19,7 +19,12 @@ logger = get_logger(__name__)
 
 
 def train_model(
-    model, train_loader, device="cpu", epochs=3, stats_file: Optional[Path] = None
+    model,
+    train_loader,
+    val_loader,
+    device="cpu",
+    epochs=3,
+    stats_file: Optional[Path] = None,
 ):
     """Train the hybrid model using cross entropy loss and Adam optimizer."""
     logger.info("Starting training for %s epochs on %s", epochs, device)
@@ -29,7 +34,6 @@ def train_model(
     lr = 1e-3
 
     model.to(device)
-    model.train()
 
     # Track hardware info
     hardware_info = get_hardware_info()
@@ -48,41 +52,69 @@ def train_model(
         total_samples = 0
         batch_count = len(train_loader)
 
-        for batch_idx, (images, labels) in enumerate(train_loader, 1):
-            images, labels = images.to(device), labels.to(device)
+        # Training loop
+        with torch.set_grad_enabled(True):
+            model.train()
+            for batch_idx, (images, labels) in enumerate(train_loader, 1):
+                images, labels = images.to(device), labels.to(device)
 
-            optimizer.zero_grad()
-            logits = model(images)
-            loss = criterion(logits, labels)
-            loss.backward()
-            optimizer.step()
+                optimizer.zero_grad()
+                outputs = model(images)
+                loss = criterion(outputs, labels)
+                loss.backward()
+                optimizer.step()
 
-            # Memory tracking
-            if device == "cuda":
-                current_memory = torch.cuda.memory_allocated() / 1024**2
-                peak_memory = max(peak_memory, current_memory)
+                # Memory tracking
+                if device == "cuda":
+                    current_memory = torch.cuda.memory_allocated() / 1024**2
+                    peak_memory = max(peak_memory, current_memory)
 
-            # Update statistics
-            total_loss += loss.item() * images.size(0)
-            total_correct += (logits.argmax(dim=1) == labels).sum().item()
-            total_samples += images.size(0)
+                # Update statistics
+                total_loss += loss.item() * images.size(0)
+                total_correct += (outputs.argmax(dim=1) == labels).sum().item()
+                total_samples += images.size(0)
 
-            # Log progress every 10% of batches
-            if batch_idx % max(1, batch_count // 10) == 0:
-                current_loss = total_loss / total_samples
-                current_acc = 100.0 * total_correct / total_samples
-                logger.info(
-                    "Epoch %d [%d/%d] Loss: %.4f Acc: %.1f%%",
-                    epoch + 1,
-                    batch_idx,
-                    batch_count,
-                    current_loss,
-                    current_acc,
-                )
+                # Log progress every 10% of batches
+                if batch_idx % max(1, batch_count // 10) == 0:
+                    current_loss = total_loss / total_samples
+                    current_acc = 100.0 * total_correct / total_samples
+                    logger.info(
+                        "Epoch %d [%d/%d] Loss: %.4f Acc: %.1f%%",
+                        epoch + 1,
+                        batch_idx,
+                        batch_count,
+                        current_loss,
+                        current_acc,
+                    )
 
         epoch_time = time.time() - epoch_start_time
         avg_loss = total_loss / total_samples
         accuracy = 100.0 * total_correct / total_samples
+
+        # Validation phase
+        with torch.no_grad(), torch.inference_mode():
+            model.eval()
+            val_loss = 0.0
+            val_correct = 0
+            val_total = 0
+
+            for images, labels in val_loader:
+                images, labels = images.to(device), labels.to(device)
+                outputs = model(images)
+                loss = criterion(outputs, labels)
+
+                val_loss += loss.item() * images.size(0)
+                val_correct += (outputs.argmax(dim=1) == labels).sum().item()
+                val_total += images.size(0)
+
+        val_loss = val_loss / val_total
+        val_accuracy = 100.0 * val_correct / val_total
+
+        logger.info(
+            "Validation - Loss: %.4f, Accuracy: %.2f%%",
+            val_loss,
+            val_accuracy,
+        )
 
         # Log epoch summary
         logger.info(
@@ -99,8 +131,10 @@ def train_model(
         epoch_stats = {
             "timestamp": datetime.now().isoformat(),
             "epoch": epoch + 1,
-            "loss": avg_loss,
-            "accuracy": accuracy,
+            "train_loss": avg_loss,
+            "train_accuracy": accuracy,
+            "val_loss": val_loss,
+            "val_accuracy": val_accuracy,
             "samples_processed": total_samples,
             "epoch_time": epoch_time,
             "total_time": time.time() - total_start_time,
@@ -120,6 +154,7 @@ def train_model(
             log_training_stats(stats_file, epoch_stats)
 
     total_time = time.time() - total_start_time
+    model.eval()  # Ensure model is in eval mode after training
     logger.info(
         "Training complete! Total time: %.2fs, Final accuracy: %.2f%%",
         total_time,
@@ -133,6 +168,8 @@ def train_hybrid_model(
     ansatz_reps: int = 1,
     epochs: int = 3,
     batch_size: int = 32,
+    train_ratio: float = 0.7,
+    val_ratio: float = 0.15,
     learning_rate: float = 1e-3,
     device: Optional[str] = None,
     dataset_type: str = "emnist",
@@ -155,21 +192,32 @@ def train_hybrid_model(
 
     # Load appropriate dataset
     logger.info("Loading %s dataset from %s", dataset_type, dataset_path)
-    if dataset_type.lower() == "emnist":
-        dataset = EMNISTDataset(root=dataset_path, train=True, download=True)
-    elif dataset_type.lower() == "mnist":
-        dataset = MNISTDataset(root=dataset_path, train=True, download=True)
-    elif dataset_type.lower() == "custom":
-        dataset = CustomImageDataset(root=dataset_path)
-    else:
-        raise ValueError("Unknown dataset type: %s", dataset_type)
+    try:
+        if dataset_type.lower() == "emnist":
+            dataset = EMNISTDataset(root=dataset_path, train=True, download=True)
+        elif dataset_type.lower() == "mnist":
+            dataset = MNISTDataset(root=dataset_path, train=True, download=True)
+        elif dataset_type.lower() == "custom":
+            dataset = CustomImageDataset(root=dataset_path)
+        else:
+            raise ValueError("Unknown dataset type: %s", dataset_type)
+    except Exception as e:
+        logger.error("Failed to load dataset: %s", e)
+        raise
 
     # Create data loaders
     logger.info("Creating data loaders...")
     train_loader, val_loader, test_loader = dataset.create_data_loaders(
-        batch_size=batch_size, train_ratio=0.7, val_ratio=0.15, num_workers=4
+        batch_size=batch_size,
+        train_ratio=train_ratio,
+        val_ratio=val_ratio,
+        num_workers=4,
     )
-    logger.info("Created data loaders - Train: %d samples", len(train_loader.dataset))
+    logger.info(
+        "Created data loaders - Train: %d samples, Val: %d samples",
+        len(train_loader.dataset),
+        len(val_loader.dataset),
+    )
 
     # Create model
     num_classes = dataset.get_num_classes()
@@ -191,7 +239,12 @@ def train_hybrid_model(
 
     # Train model
     training_stats = train_model(
-        model, train_loader, device=device, epochs=epochs, stats_file=stats_file
+        model,
+        train_loader,
+        val_loader,
+        device=device,
+        epochs=epochs,
+        stats_file=stats_file,
     )
 
     # Run test if requested

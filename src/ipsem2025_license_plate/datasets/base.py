@@ -21,7 +21,6 @@ class BaseDataset(Dataset, ABC):
         Returns:
             Tuple of (channels, height, width)
         """
-        pass
 
     @abstractmethod
     def get_num_classes(self) -> int:
@@ -30,7 +29,6 @@ class BaseDataset(Dataset, ABC):
         Returns:
             Number of unique classes
         """
-        pass
 
     @abstractmethod
     def get_class_mapping(self) -> Dict[int, str]:
@@ -39,12 +37,10 @@ class BaseDataset(Dataset, ABC):
         Returns:
             Dictionary mapping class indices to human-readable names
         """
-        pass
 
     @abstractmethod
     def __len__(self) -> int:
         """Get the total number of samples in the dataset."""
-        pass
 
     @abstractmethod
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int]:
@@ -57,7 +53,6 @@ class BaseDataset(Dataset, ABC):
             Tuple of (image, label) where image is a tensor and
             label is an integer class index
         """
-        pass
 
     @classmethod
     @abstractmethod
@@ -77,7 +72,6 @@ class BaseDataset(Dataset, ABC):
         Raises:
             ValueError: If the dataset at the path is invalid or unsupported
         """
-        pass
 
     def create_data_loaders(
         self,

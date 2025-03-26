@@ -3,7 +3,7 @@
 from typing import Dict
 
 import torch
-import torch.nn as nn
+from torch import nn
 from torch.utils.data import DataLoader
 
 from ..utils.logging_utils import get_logger

@@ -29,6 +29,12 @@ def train_command(
     batch_size: int = typer.Option(
         32, "--batch-size", "-b", help="Training batch size"
     ),
+    train_ratio: float = typer.Option(
+        0.7, "--train-ratio", help="Ratio of data to use for training (0.0-1.0)"
+    ),
+    val_ratio: float = typer.Option(
+        0.15, "--val-ratio", help="Ratio of data to use for validation (0.0-1.0)"
+    ),
     learning_rate: float = typer.Option(
         1e-3, "--learning-rate", "-l", help="Learning rate"
     ),
@@ -66,12 +72,28 @@ def train_command(
             log_file=log_file,
         )
 
+        # Validate dataset split ratios
+        if not 0.0 <= train_ratio <= 1.0:
+            raise ValueError(
+                f"Train ratio must be between 0.0 and 1.0, got {train_ratio}"
+            )
+        if not 0.0 <= val_ratio <= 1.0:
+            raise ValueError(
+                f"Validation ratio must be between 0.0 and 1.0, got {val_ratio}"
+            )
+        if train_ratio + val_ratio > 1.0:
+            raise ValueError(
+                f"Sum of train ratio ({train_ratio}) and validation ratio ({val_ratio}) cannot exceed 1.0"
+            )
+
         logger.info("Starting quantum-classical model training...")
         logger.debug("Training parameters:")
         logger.debug("  n_qubits: %s", n_qubits)
         logger.debug("  ansatz_reps: %s", ansatz_reps)
         logger.debug("  epochs: %s", epochs)
         logger.debug("  batch_size: %s", batch_size)
+        logger.debug("  train_ratio: %s", train_ratio)
+        logger.debug("  val_ratio: %s", val_ratio)
         logger.debug("  dataset_type: %s", dataset_type)
         logger.debug("  model_save_path: %s", model_save_path)
         logger.debug("  stats_file: %s", stats_file)
@@ -82,6 +104,8 @@ def train_command(
             ansatz_reps=ansatz_reps,
             epochs=epochs,
             batch_size=batch_size,
+            train_ratio=train_ratio,
+            val_ratio=val_ratio,
             learning_rate=learning_rate,
             dataset_type=dataset_type,
             dataset_path=dataset_path,
@@ -98,7 +122,7 @@ def train_command(
             )
         return 0
     except Exception as e:
-        logger.exception("Training failed")
+        logger.exception(f"Training failed: %s", e)
         return 1
 
 
@@ -167,7 +191,7 @@ def test_command(
         return 0
 
     except Exception as e:
-        logger.exception("Evaluation failed")
+        logger.exception("Evaluation failed: %s", e)
         return 1
 
 
@@ -176,5 +200,5 @@ def main():
     try:
         return app()
     except Exception as e:
-        logger.exception("An error occurred")
+        logger.exception("An error occurred: %s", e)
         return 1

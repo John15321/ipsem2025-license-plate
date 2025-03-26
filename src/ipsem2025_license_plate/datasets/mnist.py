@@ -76,41 +76,26 @@ class MNISTDataset(BaseDataset):
 
     @staticmethod
     def exists_at_path(path: str) -> bool:
-        """Check if a MNIST dataset exists at the given path.
+        """Check if MNIST dataset exists at the given path.
 
         Args:
-            path: Path to check for dataset files
+            path: Path to check for dataset
 
         Returns:
-            True if dataset files exist, False otherwise
+            True if dataset exists, False otherwise
         """
-        # Check for the processed files that indicate a downloaded dataset
-        raw_folder = os.path.join(path, "MNIST", "raw")
-        processed_folder = os.path.join(path, "MNIST", "processed")
-
-        if not os.path.exists(raw_folder) or not os.path.exists(processed_folder):
-            return False
-
-        # Check for raw MNIST files
-        raw_files = [
+        # MNIST files that should exist after download
+        required_files = [
             "train-images-idx3-ubyte",
             "train-labels-idx1-ubyte",
             "t10k-images-idx3-ubyte",
             "t10k-labels-idx1-ubyte",
         ]
 
-        for file in raw_files:
-            if not os.path.exists(os.path.join(raw_folder, file)):
-                return False
-
         # Check for processed files
-        processed_files = [
-            "training.pt",
-            "test.pt",
-        ]
-
-        for file in processed_files:
-            if not os.path.exists(os.path.join(processed_folder, file)):
-                return False
-
-        return True
+        raw_folder = os.path.join(path, "MNIST", "raw")
+        return all(
+            os.path.exists(os.path.join(raw_folder, f))
+            or os.path.exists(os.path.join(raw_folder, f + ".gz"))
+            for f in required_files
+        )
