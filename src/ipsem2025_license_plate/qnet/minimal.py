@@ -15,17 +15,24 @@ import time
 import platform
 import psutil
 import fcntl
-from typing import Optional, Dict, Any, Union
+from typing import Optional, Dict, Any, Union, Tuple
 import os
+import json
+import pickle
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, Subset
+import torchvision
 from torchvision import datasets, transforms
 
 import typer
 from ..utils.logging_utils import configure_logging, get_logger
+from ..datasets.mnist import MNISTDataset
+from ..datasets.emnist import EMNISTDataset
+from ..datasets.custom import CustomImageDataset
+from ..datasets.base import BaseDataset
 
 from qiskit.circuit.library import ZZFeatureMap, RealAmplitudes
 from qiskit.primitives import Sampler
@@ -135,27 +142,32 @@ class HybridModel(nn.Module):
         self.n_qubits = n_qubits
         self.ansatz_reps = ansatz_reps
         self.num_classes = num_classes
+        
+        # Calculate dimensions for 64x64 input
+        # After 3 MaxPool2D layers (each dividing by 2): 64 -> 32 -> 16 -> 8
+        # After 3 Conv2D layers (each reducing by 2): 8 -> 6 -> 4 -> 2
+        # Final feature map size will be 128 * 2 * 2 = 512
 
         # Classical CNN feature extractor
         self.classical_net = nn.Sequential(
-            # First Conv block
-            nn.Conv2d(1, 32, kernel_size=3),
+            # First Conv block: 64x64 -> 31x31 -> 15x15
+            nn.Conv2d(1, 32, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.MaxPool2d(2),
             
-            # Second Conv block
-            nn.Conv2d(32, 64, kernel_size=3),
+            # Second Conv block: 15x15 -> 7x7
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.MaxPool2d(2),
             
-            # Third Conv block
-            nn.Conv2d(64, 128, kernel_size=3),
+            # Third Conv block: 7x7 -> 3x3
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.MaxPool2d(2),
             
             # Flatten and Dense layers
             nn.Flatten(),
-            nn.Linear(128 * 2 * 2, 128),  # Input size computed for 28x28 MNIST images
+            nn.Linear(128 * 8 * 8, 128),  # 8x8 is the size after 3 MaxPool2D layers
             nn.ReLU(),
             nn.Dropout(0.5),
             nn.Linear(128, n_qubits)
@@ -212,7 +224,7 @@ def train_model(model, train_loader, device="cpu", epochs=3, stats_file: Optiona
     
     training_stats = []
     total_start_time = time.time()
-    peak_memory = 0  # Initialize peak memory tracker
+    peak_memory = 0
     
     for epoch in range(epochs):
         epoch_start_time = time.time()
@@ -222,11 +234,7 @@ def train_model(model, train_loader, device="cpu", epochs=3, stats_file: Optiona
         total_correct = 0
         total_samples = 0
         
-        for batch_idx, (images, labels) in enumerate(train_loader):
-            batch_start_time = time.time()
-            if batch_idx % 10 == 0:
-                logger.debug(f"Processing batch {batch_idx}/{len(train_loader)}")
-                
+        for images, labels in train_loader:
             images, labels = images.to(device), labels.to(device)
             
             optimizer.zero_grad()
@@ -237,16 +245,12 @@ def train_model(model, train_loader, device="cpu", epochs=3, stats_file: Optiona
             
             # Memory tracking
             if device == "cuda":
-                current_memory = torch.cuda.memory_allocated() / 1024**2  # MB
+                current_memory = torch.cuda.memory_allocated() / 1024**2
                 peak_memory = max(peak_memory, current_memory)
             
             total_loss += loss.item() * images.size(0)
             total_correct += (logits.argmax(dim=1) == labels).sum().item()
             total_samples += images.size(0)
-            
-            if batch_idx % 10 == 0:
-                batch_time = time.time() - batch_start_time
-                logger.debug(f"Batch {batch_idx} took {batch_time:.2f}s")
         
         epoch_time = time.time() - epoch_start_time
         avg_loss = total_loss / total_samples
@@ -283,6 +287,89 @@ def train_model(model, train_loader, device="cpu", epochs=3, stats_file: Optiona
     return training_stats
 
 
+def save_model(model: HybridModel, save_path: Path, metadata: dict):
+    """Save model and its metadata to disk."""
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Save model state and metadata
+    model_data = {
+        'state_dict': model.state_dict(),
+        'metadata': metadata
+    }
+    
+    with open(save_path, 'wb') as f:
+        pickle.dump(model_data, f)
+    logger.info(f"Model saved to {save_path}")
+
+
+def load_model(load_path: Path) -> Tuple[HybridModel, dict]:
+    """Load model and its metadata from disk."""
+    with open(load_path, 'rb') as f:
+        model_data = pickle.load(f)
+    
+    metadata = model_data['metadata']
+    
+    model = HybridModel(
+        n_qubits=metadata['n_qubits'],
+        ansatz_reps=metadata['ansatz_reps'],
+        num_classes=metadata['num_classes']
+    )
+    model.load_state_dict(model_data['state_dict'])
+    
+    logger.info(f"Model loaded from {load_path}")
+    return model, metadata
+
+
+def evaluate_model(model: nn.Module, test_loader: DataLoader, device: str) -> Dict[str, float]:
+    """Evaluate model on test dataset."""
+    logger.info("Starting model evaluation")
+    model.eval()
+    
+    total_loss = 0.0
+    total_correct = 0
+    total_samples = 0
+    criterion = nn.CrossEntropyLoss()
+    
+    class_correct = torch.zeros(model.num_classes)
+    class_total = torch.zeros(model.num_classes)
+    
+    with torch.no_grad():
+        for images, labels in test_loader:
+            images, labels = images.to(device), labels.to(device)
+            outputs = model(images)
+            loss = criterion(outputs, labels)
+            
+            _, predicted = torch.max(outputs.data, 1)
+            total_samples += labels.size(0)
+            total_correct += (predicted == labels).sum().item()
+            total_loss += loss.item() * images.size(0)
+            
+            # Per-class accuracy
+            for label, pred in zip(labels, predicted):
+                if label == pred:
+                    class_correct[label] += 1
+                class_total[label] += 1
+    
+    # Calculate metrics
+    avg_loss = total_loss / total_samples
+    accuracy = 100.0 * total_correct / total_samples
+    
+    # Calculate per-class accuracies
+    class_accuracies = {}
+    for i in range(model.num_classes):
+        if class_total[i] > 0:
+            class_accuracies[f"class_{i}_accuracy"] = 100.0 * class_correct[i].item() / class_total[i].item()
+    
+    metrics = {
+        'test_loss': avg_loss,
+        'test_accuracy': accuracy,
+        **class_accuracies
+    }
+    
+    logger.info(f"Evaluation complete - Loss: {avg_loss:.4f}, Accuracy: {accuracy:.2f}%")
+    return metrics
+
+
 def train_hybrid_model(
     n_qubits: int = 2,
     ansatz_reps: int = 1,
@@ -290,8 +377,12 @@ def train_hybrid_model(
     batch_size: int = 32,
     learning_rate: float = 1e-3,
     device: Optional[str] = None,
+    dataset_type: str = "emnist",
+    dataset_path: str = "data",
+    model_save_path: Optional[str] = None,
     stats_file: Optional[Union[str, Path]] = None,
     log_file: Optional[str] = None,
+    run_test: bool = False,
     verbose: bool = False,
 ) -> Dict[str, Any]:
     """
@@ -304,8 +395,12 @@ def train_hybrid_model(
         batch_size: Training batch size
         learning_rate: Learning rate for Adam optimizer
         device: Device to train on ('cuda' or 'cpu'), defaults to auto-detect
+        dataset_type: Type of dataset to use ('emnist', 'mnist', or 'custom')
+        dataset_path: Path to dataset
+        model_save_path: Path to save trained model
         stats_file: Path to save training statistics CSV
         log_file: Path to save log output
+        run_test: Whether to run evaluation on test set after training
         verbose: Enable verbose output
         
     Returns:
@@ -313,6 +408,7 @@ def train_hybrid_model(
         - model: Trained HybridModel instance
         - final_stats: Statistics from final epoch
         - training_history: List of stats from all epochs
+        - test_metrics: Evaluation metrics on test set
         - hardware_info: System information
     """
     # Configure logging
@@ -335,15 +431,28 @@ def train_hybrid_model(
     hw_info = get_hardware_info()
     logger.info(f"Hardware info: {hw_info}")
     
-    # Setup data
-    num_classes = calc_num_classes(n_qubits)
-    digits = list(range(num_classes))
+    # Load appropriate dataset
+    logger.info(f"Loading {dataset_type} dataset from {dataset_path}")
+    if dataset_type.lower() == "emnist":
+        dataset = EMNISTDataset(root=dataset_path, train=True, download=True)
+    elif dataset_type.lower() == "mnist":
+        dataset = MNISTDataset(root=dataset_path, train=True, download=True)
+    elif dataset_type.lower() == "custom":
+        dataset = CustomImageDataset(root=dataset_path)
+    else:
+        raise ValueError(f"Unknown dataset type: {dataset_type}")
     
-    train_data = get_mnist_subset(digits, train=True)
-    train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
-    logger.info(f"Dataset loaded: {len(train_data)} samples, {num_classes} classes")
+    # Create data loaders with train/val/test split
+    train_loader, val_loader, test_loader = dataset.create_data_loaders(
+        batch_size=batch_size,
+        train_ratio=0.7,
+        val_ratio=0.15,
+        num_workers=4
+    )
+    logger.info(f"Created data loaders - Train: {len(train_loader.dataset)}, Val: {len(val_loader.dataset)}, Test: {len(test_loader.dataset)} samples")
     
-    # Create model
+    # Create model with correct number of classes for dataset
+    num_classes = dataset.get_num_classes()
     model = HybridModel(
         n_qubits=n_qubits,
         ansatz_reps=ansatz_reps,
@@ -362,10 +471,34 @@ def train_hybrid_model(
         stats_file=stats_path
     )
     
+    # Run test if requested
+    test_metrics = None
+    if run_test:
+        logger.info("Running model evaluation on test set...")
+        test_metrics = evaluate_model(model, test_loader, device)
+    
+    # Save model if path provided
+    if model_save_path:
+        save_path = Path(model_save_path)
+        metadata = {
+            'n_qubits': n_qubits,
+            'ansatz_reps': ansatz_reps,
+            'num_classes': num_classes,
+            'dataset_type': dataset_type,
+            'test_accuracy': test_metrics['test_accuracy'] if test_metrics else None,
+            'training_epochs': epochs,
+            'batch_size': batch_size,
+            'learning_rate': learning_rate,
+            'device': device,
+            'timestamp': datetime.now().isoformat()
+        }
+        save_model(model, save_path, metadata)
+    
     return {
         'model': model,
         'final_stats': training_stats[-1] if training_stats else None,
         'training_history': training_stats,
+        'test_metrics': test_metrics,
         'hardware_info': hw_info
     }
 
@@ -376,16 +509,40 @@ def train_command(
     epochs: int = typer.Option(3, "--epochs", "-e", help="Number of training epochs"),
     batch_size: int = typer.Option(32, "--batch-size", "-b", help="Training batch size"),
     learning_rate: float = typer.Option(1e-3, "--learning-rate", "-l", help="Learning rate"),
+    dataset_type: str = typer.Option(
+        "emnist",
+        "--dataset-type", 
+        "-d",
+        help="Dataset type (emnist, mnist, or custom)"
+    ),
+    dataset_path: str = typer.Option(
+        "data",
+        "--dataset-path",
+        "-p",
+        help="Path to dataset"
+    ),
+    model_save_path: Optional[str] = typer.Option(
+        None,
+        "--model-save-path",
+        "-m",
+        help="Path to save trained model"
+    ),
     stats_file: str = typer.Option(
         "training_stats.csv",
         "--stats-file",
         "-s",
         help="Path to save training statistics CSV"
     ),
+    run_test: bool = typer.Option(
+        False,
+        "--test",
+        "-t",
+        help="Run evaluation on test set after training"
+    ),
     log_file: str = typer.Option(None, "--log-file", help="Path to save log output"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
 ) -> int:
-    """Train a hybrid quantum-classical neural network on MNIST digits."""
+    """Train a hybrid quantum-classical neural network."""
     try:
         result = train_hybrid_model(
             n_qubits=n_qubits,
@@ -393,14 +550,100 @@ def train_command(
             epochs=epochs,
             batch_size=batch_size,
             learning_rate=learning_rate,
+            dataset_type=dataset_type,
+            dataset_path=dataset_path,
+            model_save_path=model_save_path,
             stats_file=stats_file,
             log_file=log_file,
+            run_test=run_test,
             verbose=verbose
         )
         logger.info("Training completed successfully")
+        if result['test_metrics']:
+            logger.info(f"Test accuracy: {result['test_metrics']['test_accuracy']:.2f}%")
         return 0
     except Exception as e:
         logger.exception("Training failed")
+        return 1
+
+
+@app.command("test")
+def test_command(
+    model_path: str = typer.Option(
+        ..., 
+        "--model-path", 
+        "-m", 
+        help="Path to saved model"
+    ),
+    dataset_type: str = typer.Option(
+        "emnist",
+        "--dataset-type",
+        "-d",
+        help="Dataset type (emnist, mnist, or custom)"
+    ),
+    dataset_path: str = typer.Option(
+        "data",
+        "--dataset-path",
+        "-p",
+        help="Path to dataset"
+    ),
+    batch_size: int = typer.Option(
+        32,
+        "--batch-size",
+        "-b",
+        help="Batch size for testing"
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Enable verbose output"
+    ),
+) -> int:
+    """Evaluate a trained model on a test dataset."""
+    try:
+        # Configure logging
+        log_level = "DEBUG" if verbose else "INFO"
+        configure_logging(level=log_level)
+        
+        # Load model
+        model_path = Path(model_path)
+        model, metadata = load_model(model_path)
+        logger.info(f"Loaded model from {model_path}")
+        logger.info(f"Model metadata: {metadata}")
+        
+        # Load dataset
+        logger.info(f"Loading {dataset_type} dataset from {dataset_path}")
+        if dataset_type.lower() == "emnist":
+            dataset = EMNISTDataset(root=dataset_path, train=False, download=True)
+        elif dataset_type.lower() == "mnist":
+            dataset = MNISTDataset(root=dataset_path, train=False, download=True)
+        elif dataset_type.lower() == "custom":
+            dataset = CustomImageDataset(root=dataset_path)
+        else:
+            raise ValueError(f"Unknown dataset type: {dataset_type}")
+        
+        # Create test loader
+        _, _, test_loader = dataset.create_data_loaders(
+            batch_size=batch_size,
+            train_ratio=0.0,  # Use all data for testing
+            val_ratio=0.0
+        )
+        
+        # Evaluate
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model.to(device)
+        metrics = evaluate_model(model, test_loader, device)
+        
+        # Log results
+        logger.info("Test Results:")
+        for name, value in metrics.items():
+            logger.info(f"{name}: {value:.2f}")
+        
+        return 0
+        
+    except Exception as e:
+        logger.exception("Evaluation failed")
         return 1
 
 def main():
