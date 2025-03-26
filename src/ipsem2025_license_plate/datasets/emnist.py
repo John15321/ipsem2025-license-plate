@@ -1,7 +1,7 @@
 """EMNIST dataset implementation."""
 
 import os
-from typing import Any, Dict, Optional, Tuple, List, Callable
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import torch
 import torchvision
@@ -52,10 +52,10 @@ class EMNISTDataset(BaseDataset):
         # Load label mappings (these are small and fast to load)
         self.label_to_char = self._load_label_mapping()
         self.label_map_36 = self._build_36class_map()
-        
+
         # Initialize indices list (will be populated on first load)
         self.indices: List[int] = []
-        
+
         # Load dataset if not using lazy loading
         if not lazy_load:
             self._load_dataset()
@@ -76,7 +76,7 @@ class EMNISTDataset(BaseDataset):
         """Load the actual EMNIST dataset and filter indices."""
         if self._emnist is not None:
             return  # Already loaded
-            
+
         logger.info("Loading EMNIST dataset from %s...", self.root)
         # Load the EMNIST dataset
         self._emnist = torchvision.datasets.EMNIST(
@@ -91,9 +91,11 @@ class EMNISTDataset(BaseDataset):
         if not self.indices:
             # This is a time-consuming operation, so we do it only once
             self.indices = [
-                i for i, (_, label) in enumerate(self._emnist) if label in self.label_map_36
+                i
+                for i, (_, label) in enumerate(self._emnist)
+                if label in self.label_map_36
             ]
-            
+
         logger.info(
             "EMNIST dataset loaded with %d/%d samples (36-class filtered)",
             len(self.indices),
@@ -185,20 +187,22 @@ class EMNISTDataset(BaseDataset):
 
         logger.info("Created 36-class map: 0-9, A-Z")
         return new_map
-    
+
     @staticmethod
     def exists_at_path(path: str) -> bool:
         """Check if an EMNIST dataset exists at the given path.
-        
+
         This method checks if the dataset files exist without actually loading
         the dataset, which makes it much faster for validation.
-        
+
         Args:
             path: Path to check for dataset files
-            
+
         Returns:
             True if dataset files exist, False otherwise
         """
         # Check for the processed files that indicate a downloaded dataset
         processed_folder = os.path.join(path, "EMNIST", "processed")
-        return os.path.exists(processed_folder) and len(os.listdir(processed_folder)) > 0
+        return (
+            os.path.exists(processed_folder) and len(os.listdir(processed_folder)) > 0
+        )

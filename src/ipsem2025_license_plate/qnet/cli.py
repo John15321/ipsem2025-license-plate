@@ -4,58 +4,57 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-import typer
 import torch
+import typer
 from rich.console import Console
 
 from ..utils.logging_utils import configure_logging, get_logger
-from .train import train_hybrid_model
 from .test import evaluate_model
+from .train import train_hybrid_model
 from .utils import load_model
 
-app = typer.Typer(help="IPSEM 2025 Hybrid Quantum-Classical Neural Network", add_completion=False)
+app = typer.Typer(
+    help="IPSEM 2025 Hybrid Quantum-Classical Neural Network", add_completion=False
+)
 console = Console()
 logger = get_logger(__name__)
+
 
 @app.command("train")
 def train_command(
     n_qubits: int = typer.Option(2, "--n-qubits", "-q", help="Number of qubits to use"),
-    ansatz_reps: int = typer.Option(1, "--ansatz-reps", "-r", help="Depth of RealAmplitudes ansatz"),
+    ansatz_reps: int = typer.Option(
+        1, "--ansatz-reps", "-r", help="Depth of RealAmplitudes ansatz"
+    ),
     epochs: int = typer.Option(3, "--epochs", "-e", help="Number of training epochs"),
-    batch_size: int = typer.Option(32, "--batch-size", "-b", help="Training batch size"),
-    learning_rate: float = typer.Option(1e-3, "--learning-rate", "-l", help="Learning rate"),
+    batch_size: int = typer.Option(
+        32, "--batch-size", "-b", help="Training batch size"
+    ),
+    learning_rate: float = typer.Option(
+        1e-3, "--learning-rate", "-l", help="Learning rate"
+    ),
     dataset_type: str = typer.Option(
-        "emnist",
-        "--dataset-type", 
-        "-d",
-        help="Dataset type (emnist, mnist, or custom)"
+        "emnist", "--dataset-type", "-d", help="Dataset type (emnist, mnist, or custom)"
     ),
     dataset_path: str = typer.Option(
-        "data",
-        "--dataset-path",
-        "-p",
-        help="Path to dataset"
+        "data", "--dataset-path", "-p", help="Path to dataset"
     ),
     model_save_path: Optional[str] = typer.Option(
-        None,
-        "--model-save-path",
-        "-m",
-        help="Path to save trained model"
+        None, "--model-save-path", "-m", help="Path to save trained model"
     ),
     stats_file: str = typer.Option(
         "training_stats.csv",
         "--stats-file",
         "-s",
-        help="Path to save training statistics CSV"
+        help="Path to save training statistics CSV",
     ),
     run_test: bool = typer.Option(
-        False,
-        "--test",
-        "-t",
-        help="Run evaluation on test set after training"
+        False, "--test", "-t", help="Run evaluation on test set after training"
     ),
     log_file: str = typer.Option(None, "--log-file", help="Path to save log output"),
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Enable verbose output"
+    ),
 ) -> int:
     """Train a hybrid quantum-classical neural network."""
     try:
@@ -65,9 +64,9 @@ def train_command(
             level=log_level,
             log_to_console=True,
             log_to_file=bool(log_file),
-            log_file=log_file
+            log_file=log_file,
         )
-        
+
         logger.info("Starting quantum-classical model training...")
         logger.debug("Training parameters:")
         logger.debug(f"  n_qubits: {n_qubits}")
@@ -78,7 +77,7 @@ def train_command(
         logger.debug(f"  model_save_path: {model_save_path}")
         logger.debug(f"  stats_file: {stats_file}")
         logger.debug(f"  run_test: {run_test}")
-        
+
         result = train_hybrid_model(
             n_qubits=n_qubits,
             ansatz_reps=ansatz_reps,
@@ -91,11 +90,13 @@ def train_command(
             stats_file=stats_file,
             log_file=log_file,
             run_test=run_test,
-            verbose=verbose
+            verbose=verbose,
         )
         logger.info("Training completed successfully")
-        if result['test_metrics']:
-            logger.info(f"Test accuracy: {result['test_metrics']['test_accuracy']:.2f}%")
+        if result["test_metrics"]:
+            logger.info(
+                f"Test accuracy: {result['test_metrics']['test_accuracy']:.2f}%"
+            )
         return 0
     except Exception as e:
         logger.exception("Training failed")
@@ -105,34 +106,19 @@ def train_command(
 @app.command("test")
 def test_command(
     model_path: str = typer.Option(
-        ..., 
-        "--model-path", 
-        "-m", 
-        help="Path to saved model"
+        ..., "--model-path", "-m", help="Path to saved model"
     ),
     dataset_type: str = typer.Option(
-        "emnist",
-        "--dataset-type",
-        "-d",
-        help="Dataset type (emnist, mnist, or custom)"
+        "emnist", "--dataset-type", "-d", help="Dataset type (emnist, mnist, or custom)"
     ),
     dataset_path: str = typer.Option(
-        "data",
-        "--dataset-path",
-        "-p",
-        help="Path to dataset"
+        "data", "--dataset-path", "-p", help="Path to dataset"
     ),
     batch_size: int = typer.Option(
-        32,
-        "--batch-size",
-        "-b",
-        help="Batch size for testing"
+        32, "--batch-size", "-b", help="Batch size for testing"
     ),
     verbose: bool = typer.Option(
-        False,
-        "--verbose",
-        "-v",
-        help="Enable verbose output"
+        False, "--verbose", "-v", help="Enable verbose output"
     ),
 ) -> int:
     """Evaluate a trained model on a test dataset."""
@@ -140,17 +126,17 @@ def test_command(
         # Configure logging
         log_level = "DEBUG" if verbose else "INFO"
         configure_logging(level=log_level)
-        
+
         # Load model
         model_path = Path(model_path)
         model, metadata = load_model(model_path)
         logger.info(f"Loaded model from {model_path}")
         logger.info(f"Model metadata: {metadata}")
-        
+
         # Load dataset
-        from ..datasets.mnist import MNISTDataset
-        from ..datasets.emnist import EMNISTDataset
         from ..datasets.custom import CustomImageDataset
+        from ..datasets.emnist import EMNISTDataset
+        from ..datasets.mnist import MNISTDataset
 
         logger.info(f"Loading {dataset_type} dataset from {dataset_path}")
         if dataset_type.lower() == "emnist":
@@ -161,26 +147,26 @@ def test_command(
             dataset = CustomImageDataset(root=dataset_path)
         else:
             raise ValueError(f"Unknown dataset type: {dataset_type}")
-        
+
         # Create test loader
         _, _, test_loader = dataset.create_data_loaders(
             batch_size=batch_size,
             train_ratio=0.0,  # Use all data for testing
-            val_ratio=0.0
+            val_ratio=0.0,
         )
-        
+
         # Evaluate
         device = "cuda" if torch.cuda.is_available() else "cpu"
         model.to(device)
         metrics = evaluate_model(model, test_loader, device)
-        
+
         # Log results
         logger.info("Test Results:")
         for name, value in metrics.items():
             logger.info(f"{name}: {value:.2f}")
-        
+
         return 0
-        
+
     except Exception as e:
         logger.exception("Evaluation failed")
         return 1

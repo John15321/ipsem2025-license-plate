@@ -50,7 +50,9 @@ def test_dataset_creation(emnist_downloaded_dataset):
     logger.info("Testing dataset creation...")
     assert isinstance(emnist_downloaded_dataset, EMNISTDataset)
     assert len(emnist_downloaded_dataset) > 0
-    logger.info("Dataset creation test passed with %d samples", len(emnist_downloaded_dataset))
+    logger.info(
+        "Dataset creation test passed with %d samples", len(emnist_downloaded_dataset)
+    )
 
 
 def test_image_dimensions(emnist_downloaded_dataset):
@@ -159,7 +161,9 @@ def test_custom_transform(emnist_dataset_root, emnist_downloaded_dataset):
         ]
     )
 
-    logger.info("Creating dataset with custom 32x32 transform (reusing existing data)...")
+    logger.info(
+        "Creating dataset with custom 32x32 transform (reusing existing data)..."
+    )
     dataset = EMNISTDataset(
         root=str(emnist_dataset_root),  # Reuse the shared dataset root
         transform=custom_transform,
@@ -228,30 +232,36 @@ def test_label_mapping_creation(emnist_dataset_root, emnist_downloaded_dataset):
 
 def test_mock_dataset():
     """Test using a mock to avoid downloads completely."""
-    with mock.patch('ipsem2025_license_plate.datasets.emnist.EMNISTDataset._load_label_mapping') as mock_load_mapping:
+    with mock.patch(
+        "ipsem2025_license_plate.datasets.emnist.EMNISTDataset._load_label_mapping"
+    ) as mock_load_mapping:
         # Mock the label mapping method to return a predefined mapping
         mock_mapping = {i: str(i) for i in range(10)}  # 0-9 digits
-        mock_mapping.update({i+10: chr(ord('A') + i) for i in range(26)})  # A-Z letters
+        mock_mapping.update(
+            {i + 10: chr(ord("A") + i) for i in range(26)}
+        )  # A-Z letters
         mock_load_mapping.return_value = mock_mapping
 
         # Mock an in-memory dataset without downloading
-        with mock.patch('torchvision.datasets.EMNIST') as mock_emnist:
+        with mock.patch("torchvision.datasets.EMNIST") as mock_emnist:
             # Configure the mock to return predictable data
             mock_instance = mock.MagicMock()
             mock_instance.__len__.return_value = 100
             mock_instance.__getitem__.side_effect = lambda idx: (
                 torch.randn(1, 64, 64),  # Random tensor as image
-                idx % 36  # Cycle through 0-35 as labels
+                idx % 36,  # Cycle through 0-35 as labels
             )
             mock_emnist.return_value = mock_instance
 
             # Create dataset with mocked components
-            with mock.patch.object(EMNISTDataset, '_build_36class_map') as mock_class_map:
+            with mock.patch.object(
+                EMNISTDataset, "_build_36class_map"
+            ) as mock_class_map:
                 # Mock the class mapping to match our mock data
                 mock_class_map.return_value = {i: i for i in range(36)}
 
                 # Mock the indices list to include all indices (normally filtered)
-                with mock.patch.object(EMNISTDataset, '__init__', return_value=None):
+                with mock.patch.object(EMNISTDataset, "__init__", return_value=None):
                     dataset = EMNISTDataset(root="mock_path", download=False)
                     # Manually set attributes since __init__ is bypassed
                     dataset.indices = list(range(100))

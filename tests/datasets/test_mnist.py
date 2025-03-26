@@ -68,7 +68,9 @@ def test_dataset_creation(mnist_downloaded_dataset):
     logger.info("Testing dataset creation...")
     assert isinstance(mnist_downloaded_dataset, MNISTDataset)
     assert len(mnist_downloaded_dataset) > 0
-    logger.info("Dataset creation test passed with %d samples", len(mnist_downloaded_dataset))
+    logger.info(
+        "Dataset creation test passed with %d samples", len(mnist_downloaded_dataset)
+    )
 
 
 def test_image_dimensions(mnist_downloaded_dataset):
@@ -171,7 +173,9 @@ def test_custom_transform(mnist_dataset_root, mnist_downloaded_dataset):
         ]
     )
 
-    logger.info("Creating dataset with custom 32x32 transform (reusing existing data)...")
+    logger.info(
+        "Creating dataset with custom 32x32 transform (reusing existing data)..."
+    )
     dataset = MNISTDataset(
         root=str(mnist_dataset_root),
         transform=custom_transform,
@@ -199,25 +203,25 @@ def test_from_path(mnist_dataset_root, mnist_downloaded_dataset):
 def test_exists_at_path(mnist_dataset_root, mnist_downloaded_dataset):
     """Test exists_at_path static method."""
     logger.info("Testing exists_at_path functionality...")
-    
+
     # Test with existing dataset
     assert MNISTDataset.exists_at_path(str(mnist_dataset_root))
-    
+
     # Test with non-existent path
     assert not MNISTDataset.exists_at_path("/nonexistent/path")
-    
+
     logger.info("exists_at_path test passed")
 
 
 def test_mock_dataset():
     """Test using a mock to avoid downloads completely."""
-    with mock.patch('torchvision.datasets.MNIST') as mock_mnist:
+    with mock.patch("torchvision.datasets.MNIST") as mock_mnist:
         # Configure the mock to return predictable data
         mock_instance = mock.MagicMock()
         mock_instance.__len__.return_value = 100
         mock_instance.__getitem__.side_effect = lambda idx: (
             torch.randn(1, 64, 64),  # Random tensor as image
-            idx % 10  # Cycle through 0-9 as labels
+            idx % 10,  # Cycle through 0-9 as labels
         )
         mock_mnist.return_value = mock_instance
 

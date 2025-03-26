@@ -42,7 +42,7 @@ def emnist_dataset_root(global_temp_dir):
 def emnist_downloaded_dataset(emnist_dataset_root):
     """
     Download EMNIST dataset once and share it across all tests.
-    
+
     This is a resource-intensive operation that should only happen once
     during the entire test session.
     """
