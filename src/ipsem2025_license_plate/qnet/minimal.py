@@ -121,8 +121,11 @@ class HybridModel(nn.Module):
     """Hybrid quantum-classical network for MNIST digit classification.
     
     Architecture:
-    1. Classical CNN: Compresses MNIST image to n_qubits features
-    2. Quantum Circuit: Processes features using parameterized gates
+    1. Classical CNN: 
+       - 3 Conv2D + MaxPool2D blocks
+       - Dense layer with dropout
+       - Output: n_qubits features
+    2. Quantum Circuit: ZZFeatureMap + RealAmplitudes
     3. Classical Layer: Maps quantum output to class probabilities
     """
     def __init__(self, n_qubits=2, ansatz_reps=1, num_classes=2):
@@ -133,20 +136,41 @@ class HybridModel(nn.Module):
         self.ansatz_reps = ansatz_reps
         self.num_classes = num_classes
 
-        # Classical feature extractor
+        # Classical CNN feature extractor
         self.classical_net = nn.Sequential(
-            nn.Flatten(),            
-            nn.Linear(784, 64),
+            # First Conv block
+            nn.Conv2d(1, 32, kernel_size=3),
             nn.ReLU(),
-            nn.Linear(64, n_qubits)  
+            nn.MaxPool2d(2),
+            
+            # Second Conv block
+            nn.Conv2d(32, 64, kernel_size=3),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            
+            # Third Conv block
+            nn.Conv2d(64, 128, kernel_size=3),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            
+            # Flatten and Dense layers
+            nn.Flatten(),
+            nn.Linear(128 * 2 * 2, 128),  # Input size computed for 28x28 MNIST images
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(128, n_qubits)
         )
 
         # Quantum circuit setup
+        logger.debug(f"Creating quantum feature map with {n_qubits} qubits")
         self.feature_map = ZZFeatureMap(feature_dimension=n_qubits)
+        
+        logger.debug(f"Creating RealAmplitudes ansatz with {n_qubits} qubits, {ansatz_reps} repetitions")
         self.ansatz = RealAmplitudes(num_qubits=n_qubits, reps=ansatz_reps)
         circuit = self.feature_map.compose(self.ansatz)
 
-        # Quantum layer that outputs 2^n_qubits-dim vector
+        # Quantum layer setup
+        logger.debug("Creating SamplerQNN")
         sampler = Sampler()
         self.qnn = SamplerQNN(
             circuit=circuit,
@@ -157,12 +181,13 @@ class HybridModel(nn.Module):
         self.quantum_layer = TorchConnector(self.qnn)
 
         # Final classification layer
+        logger.debug(f"Creating final classifier layer: {2**n_qubits} -> {num_classes}")
         self.classifier = nn.Linear(2 ** n_qubits, num_classes)
         
         logger.info("Model initialization complete")
 
     def forward(self, x):
-        # Classical preprocessing: image -> n_qubits features
+        # Classical CNN: image -> n_qubits features
         classical_out = self.classical_net(x)
         # Quantum processing: features -> 2^n_qubits vector
         q_out = self.quantum_layer(classical_out)
