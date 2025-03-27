@@ -12,7 +12,7 @@ from .tools import FTYPE, STYPE, PlateExtractor, platePerspectiveUnwarpingWithWh
 def recognize_text(image_path):
     # Wczytaj obraz
     image = cv2.imread(image_path)
-    
+
     # OCR - rozpoznanie tekstu
     custom_config = r"--oem 3 --psm 10"  # Tryb dla pojedynczego znaku
     text = pytesseract.image_to_string(image, config=custom_config)
@@ -103,32 +103,34 @@ def main():
 
     # Parsowanie argumentów
     args = parser.parse_args()
-    
+
     # Folder for perspective-corrected plates
     corrected_plates_folder = "CORRECTED_PLATES"
     if not os.path.exists(corrected_plates_folder):
         os.makedirs(corrected_plates_folder)
-    
+
     # First, apply perspective correction to the whole license plates
     for filename in os.listdir(args.input):
         file_path = os.path.join(args.input, filename)
-        if os.path.isfile(file_path) and filename.lower().endswith(('.png', '.jpg', '.jpeg')):
+        if os.path.isfile(file_path) and filename.lower().endswith(
+            (".png", ".jpg", ".jpeg")
+        ):
             # Read the image
             image = cv2.imread(file_path)
-            
+
             # Apply perspective correction to whole plate
             plate_xmin = 0
             plate_ymin = 0
             plate_ymax, plate_xmax = image.shape[:2]
-            
+
             corrected_image = platePerspectiveUnwarpingWithWhite(
                 image, plate_xmin, plate_ymin, plate_xmax, plate_ymax
             )
-            
+
             # Save the corrected image
             corrected_path = os.path.join(corrected_plates_folder, filename)
             cv2.imwrite(corrected_path, corrected_image)
-    
+
     # Now extract characters from the corrected plates
     extractor.apply_extraction_onpath(
         input_path=corrected_plates_folder, ftype=FTYPE.SINGLECHAR, stype=STYPE.BINARY
