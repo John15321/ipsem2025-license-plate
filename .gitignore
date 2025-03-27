@@ -12,7 +12,8 @@ data/*
 models/*
 # C extensions
 *.so
-
+dupa/
+dupa*/*
 # Distribution / packaging
 .Python
 build/
