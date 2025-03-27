@@ -21,11 +21,13 @@ rich = "^13.7.0"
 yolov5 = "^7.0.14"
 opencv-python = "^4.11.0.86"
 pytesseract = "^0.3.13"
+imutils = "^0.5.4"
 
 [tool.poetry.scripts]
 ipsem2025-train = "ipsem2025_license_plate.qnet.cli:main"
 ipsem2025-dataset = "ipsem2025_license_plate.datasets.cli:main"
 ipsem2025-plate-recognizer = "ipsem2025_license_plate.plate_extraction.detect:cli"
+ipsem2025-character-extractor = "ipsem2025_license_plate.plate_character_extraction.generate_dataset_with_labels:main"
 
 [tool.poetry.group.format.dependencies]
 black = "^25.1.0"
