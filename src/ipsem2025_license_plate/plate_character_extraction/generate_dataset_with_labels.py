@@ -5,7 +5,8 @@ import sys
 
 import cv2
 import pytesseract
-from tools import FTYPE, STYPE, PlateExtractor
+
+from .tools import FTYPE, STYPE, PlateExtractor
 
 
 def recognize_text(image_path):

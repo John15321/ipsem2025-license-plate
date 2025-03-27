@@ -1,6 +1,6 @@
 import sys
 
-from tools import FTYPE, STYPE, PlateExtractor
+from .tools import FTYPE, STYPE, PlateExtractor
 
 # Generating our istance
 extractor = PlateExtractor()
