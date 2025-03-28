@@ -148,17 +148,39 @@ class HybridModel(nn.Module):
         else:
             self.sampler = sampler
 
-        # Transpile the circuit to ensure compatibility with Aer simulator
+        # Force decomposition and transpilation of the circuit for GPU simulation
         if aer_simulator:
-            logger.info("Transpiling quantum circuit for GPU simulation compatibility")
-            circuit = transpile(circuit, backend=aer_simulator)
-            logger.info(f"Circuit transpiled, depth: {circuit.depth()}")
+            logger.info(
+                "Forcing decomposition of quantum circuit for GPU compatibility"
+            )
+            # First explicitly decompose the circuit to break down high-level instructions
+            circuit = circuit.decompose(reps=3)  # Decompose multiple levels deep
+
+            # Then transpile the circuit with explicitly specified basis gates
+            logger.info("Transpiling quantum circuit with explicit basis gates")
+            circuit = transpile(
+                circuit,
+                backend=aer_simulator,
+                basis_gates=["rx", "ry", "rz", "cx", "x", "h"],
+            )
+            logger.info(
+                f"Circuit successfully decomposed and transpiled, depth: {circuit.depth()}"
+            )
+
+            # Print some info about the circuit to verify it's properly decomposed
+            logger.debug(
+                f"Transpiled circuit instructions: {[op.name for op in circuit.data]}"
+            )
+
+        # Extract parameters from the transpiled circuit
+        input_params = self.feature_map.parameters
+        weight_params = self.ansatz.parameters
 
         # Quantum layer setup
         self.qnn = SamplerQNN(
             circuit=circuit,
-            input_params=self.feature_map.parameters,
-            weight_params=self.ansatz.parameters,
+            input_params=input_params,
+            weight_params=weight_params,
             sampler=self.sampler,
             input_gradients=True,
         )
@@ -201,9 +223,6 @@ class HybridModel(nn.Module):
 
     def get_circuit_depth(self) -> int:
         """Returns the depth of the quantum circuit used in the model."""
-        # Since we're using a transpiled circuit inside the QNN,
-        # we can't directly access its depth here,
-        # but we can estimate based on the original feature map and ansatz
         return self.feature_map.depth() + self.ansatz.depth()
 
     def get_model_info(self) -> Dict[str, object]:
