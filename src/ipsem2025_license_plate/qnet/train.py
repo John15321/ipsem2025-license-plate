@@ -8,10 +8,10 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 import psutil
-import torch
-from torch import nn, optim
-from qiskit_aer.primitives import SamplerV2
 import qiskit_aer
+import torch
+from qiskit_aer.primitives import SamplerV2
+from torch import nn, optim
 
 from ..utils.logging_utils import get_logger
 from .model import HybridModel
@@ -185,24 +185,58 @@ def train_hybrid_model(
     use_gpu_for_qnn: bool = True,
 ) -> Dict[str, Any]:
     """Train the hybrid quantum-classical model."""
+    logger.info("===========================================================")
+    logger.info("Starting hybrid quantum-classical neural network training")
+    logger.info("===========================================================")
+    logger.info("Configuration:")
+    logger.info(
+        "  - Quantum configuration: %d qubits, %d ansatz repetitions",
+        n_qubits,
+        ansatz_reps,
+    )
+    logger.info("  - Training parameters: %d epochs, batch size %d", epochs, batch_size)
+    logger.info("  - Dataset: %s from %s", dataset_type, dataset_path)
+    logger.info(
+        "  - Data split: %.1f%% train, %.1f%% validation, %.1f%% test",
+        train_ratio * 100,
+        val_ratio * 100,
+        (1 - train_ratio - val_ratio) * 100,
+    )
+
     # Select device
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
-    logger.info("Using device: %s", device)
+    logger.info("Using device for classical computation: %s", device)
+
+    # Log hardware information
+    hw_info = get_hardware_info()
+    logger.info("Hardware information:")
+    logger.info(
+        "  - CPU: %s with %s cores (%s threads)",
+        hw_info.get("cpu_model", "Unknown"),
+        hw_info.get("cpu_count", "Unknown"),
+        hw_info.get("cpu_threads", "Unknown"),
+    )
+    logger.info("  - Memory: %s", hw_info.get("total_memory", "Unknown"))
+
+    if torch.cuda.is_available():
+        logger.info("  - GPU: %s", hw_info.get("gpu_model", "Unknown"))
+        logger.info("  - GPU Memory: %s", hw_info.get("gpu_memory", "Unknown"))
 
     # Setup GPU-accelerated quantum sampler if requested
+    logger.info("Initializing quantum simulation backend...")
     sampler = None
     if use_gpu_for_qnn and torch.cuda.is_available():
         logger.info("Creating GPU-accelerated quantum simulator via qiskit-aer-gpu")
         try:
-            # Create simulator with GPU method
-            backend = qiskit_aer.AerSimulator()
-            
-            # Configure GPU in a way compatible with qiskit-aer-gpu
-            backend.set_options(device='GPU')
-            
-            # Create SamplerV2 with the configured backend
-            sampler = SamplerV2(backend=backend)
+            # Configure GPU in the options dictionary, not as a direct backend parameter
+            backend_options = {"method": "statevector"}
+            run_options = {"device": "GPU"}
+
+            # Create SamplerV2 with the correct options structure
+            sampler = SamplerV2(
+                options={"backend_options": backend_options, "run_options": run_options}
+            )
             logger.info("GPU acceleration successfully enabled for quantum simulation")
         except Exception as e:
             logger.warning(f"Failed to initialize GPU quantum simulator: {e}")
@@ -211,20 +245,28 @@ def train_hybrid_model(
     else:
         if use_gpu_for_qnn and not torch.cuda.is_available():
             logger.warning("GPU requested for QNN but not available")
+            logger.info("Using CPU-based quantum simulation")
 
+    logger.info("Loading dataset modules...")
     from ..datasets.custom import CustomImageDataset
     from ..datasets.emnist import EMNISTDataset
     from ..datasets.mnist import MNISTDataset
 
     # Load appropriate dataset
-    logger.info("Loading %s dataset from %s", dataset_type, dataset_path)
+    logger.info("Loading %s dataset from %s...", dataset_type, dataset_path)
     try:
         if dataset_type.lower() == "emnist":
+            logger.info("Initializing EMNIST dataset (this may take a moment)...")
             dataset = EMNISTDataset(root=dataset_path, train=True, download=True)  # type: ignore
+            logger.info("EMNIST dataset loaded successfully")
         elif dataset_type.lower() == "mnist":
+            logger.info("Initializing MNIST dataset...")
             dataset = MNISTDataset(root=dataset_path, train=True, download=True)  # type: ignore
+            logger.info("MNIST dataset loaded successfully")
         elif dataset_type.lower() == "custom":
+            logger.info("Loading custom image dataset...")
             dataset = CustomImageDataset(root=dataset_path)  # type: ignore
+            logger.info("Custom dataset loaded successfully")
         else:
             raise ValueError("Unknown dataset type: %s", dataset_type)
     except Exception as e:
@@ -232,7 +274,7 @@ def train_hybrid_model(
         raise
 
     # Create data loaders
-    logger.info("Creating data loaders...")
+    logger.info("Creating data loaders with batch size %d...", batch_size)
     train_loader, val_loader, test_loader = dataset.create_data_loaders(
         batch_size=batch_size,
         train_ratio=train_ratio,
@@ -242,24 +284,25 @@ def train_hybrid_model(
 
     # Log the sizes of the datasets
     logger.info(
-        "Data loader sizes - Train: %d, Val: %d, Test: %d",
+        "Data split complete - Train: %d samples, Val: %d samples, Test: %d samples",
         len(train_loader.dataset),  # type: ignore
         len(val_loader.dataset),  # type: ignore
         len(test_loader.dataset),  # type: ignore
     )
-
-    logger.info(
-        "Created data loaders - Train: %d samples, Val: %d samples",  # type: ignore[arg-type]
-        len(train_loader.dataset),  # type: ignore[arg-type]
-        len(val_loader.dataset),  # type: ignore[arg-type]
-    )
+    logger.info("Dataset class distribution:")
+    class_mapping = dataset.get_class_mapping()
+    for class_idx in sorted(list(class_mapping.keys()))[:10]:  # Show first 10 classes
+        logger.info("  - Class %d: %s", class_idx, class_mapping[class_idx])
+    if len(class_mapping) > 10:
+        logger.info("  - ...and %d more classes", len(class_mapping) - 10)
 
     # Create model with GPU sampler if available
     num_classes = dataset.get_num_classes()
     logger.info(
-        "Creating hybrid model with %d qubits, %d ansatz repetitions",
+        "Creating hybrid model with %d qubits, %d ansatz repetitions, %d output classes",
         n_qubits,
         ansatz_reps,
+        num_classes,
     )
     model = HybridModel(
         n_qubits=n_qubits,
@@ -268,13 +311,24 @@ def train_hybrid_model(
         sampler=sampler,
         use_gpu=use_gpu_for_qnn,
     )
+    model_info = model.get_model_info()
     logger.info(
-        "Model created with %d parameters", sum(p.numel() for p in model.parameters())
+        "Model created with %d parameters (%d classical, %d quantum)",
+        model_info["total_params"],
+        model_info["classical_params"],
+        model_info["quantum_params"],
     )
+    logger.info("Quantum circuit depth: %d", model_info["circuit_depth"])
 
     # Convert stats file to Path if provided
     if stats_file is not None and isinstance(stats_file, str):
         stats_file = Path(stats_file)
+        logger.info("Will save training statistics to %s", stats_file)
+
+    if model_save_path:
+        logger.info("Will save trained model to %s", model_save_path)
+
+    logger.info("Starting training...")
 
     # Train model
     training_stats = train_model(
