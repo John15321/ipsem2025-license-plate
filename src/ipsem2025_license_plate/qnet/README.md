@@ -17,9 +17,21 @@ The `HybridModel` combines classical and quantum computing components:
    - RealAmplitudes variational ansatz with configurable depth
    - SamplerQNN with gradient support
    - Torch connector for PyTorch integration
+   - GPU-accelerated circuit simulation (via qiskit-aer-gpu)
 
 3. **Classical Output Layer**:
    - Maps quantum measurement outcomes to class probabilities
+
+## GPU-Accelerated Quantum Simulation
+
+The model supports GPU-accelerated quantum circuit simulation via the qiskit-aer-gpu package:
+
+- **Faster Training**: Significantly speeds up quantum circuit simulations, especially for larger circuits
+- **Automatic Detection**: Detects available GPUs and uses them automatically
+- **Configurable**: Can be enabled/disabled via CLI option
+- **Graceful Fallback**: Falls back to CPU if GPU is not available
+
+To use GPU acceleration, ensure you have the `qiskit-aer-gpu` package installed and a CUDA-compatible GPU.
 
 ## CLI Usage
 
@@ -44,7 +56,11 @@ ipsem2025-train train \
     --stats-file training_stats.csv \
     --test  # Run evaluation after training
     --log-file train.log \
-    --verbose
+    --verbose \
+    --use-gpu-for-qnn  # Enable GPU acceleration for quantum circuits
+
+# Disable GPU acceleration (use CPU only)
+ipsem2025-train train --no-gpu-for-qnn
 
 # Test a trained model
 ipsem2025-train test \
@@ -72,6 +88,7 @@ Training options:
 - `--test, -t`: Run evaluation after training
 - `--log-file`: Path to save log output
 - `--verbose, -v`: Enable verbose output
+- `--use-gpu-for-qnn/--no-gpu-for-qnn`: Enable/disable GPU acceleration for quantum circuit simulation (default: enabled)
 
 Testing options:
 - `--model-path, -m`: Path to saved model (required)
@@ -89,7 +106,7 @@ from ipsem2025_license_plate.qnet.model import HybridModel
 from ipsem2025_license_plate.qnet.train import train_hybrid_model
 from ipsem2025_license_plate.datasets.emnist import EMNISTDataset
 
-# Train a model
+# Train a model with GPU-accelerated quantum simulation
 result = train_hybrid_model(
     n_qubits=4,
     ansatz_reps=2,
@@ -104,7 +121,8 @@ result = train_hybrid_model(
     stats_file="training_stats.csv",
     log_file="train.log",
     run_test=True,
-    verbose=True
+    verbose=True,
+    use_gpu_for_qnn=True  # Enable GPU acceleration for quantum circuits
 )
 
 # Access results
@@ -113,13 +131,14 @@ final_stats = result['final_stats']
 training_history = result['training_history']
 test_metrics = result['test_metrics']
 
-# Use the model directly
+# Use the model directly (with GPU acceleration)
 dataset = EMNISTDataset(root="data")
 model = HybridModel(
     n_qubits=4, 
     ansatz_reps=2, 
     num_classes=36,
-    input_channels=1  # grayscale images
+    input_channels=1,  # grayscale images
+    use_gpu=True  # Enable GPU acceleration for quantum circuit simulation
 )
 model.load_state_dict(torch.load("model.pt"))
 
@@ -142,6 +161,28 @@ The training process records detailed statistics in CSV format:
 - Training time and memory usage
 - Hardware information
 - Model parameters
+
+### Example Training Statistics CSV
+
+Here's an example of the statistics CSV file generated during training:
+
+```csv
+timestamp,epoch,train_loss,train_accuracy,val_loss,val_accuracy,samples_processed,epoch_time,total_time,learning_rate,cpu_memory_mb,gpu_memory_mb,batch_size,cpu_model,python_version,torch_version,cuda_version,total_memory,cpu_count,cpu_threads
+2025-03-28T20:47:58.651611,1,3.348637762759262,6.217598908594816,3.286354132574653,6.647339699863575,58640,809.327287197113,1007.9645798206329,0.001,1277.4140625,0,32,x86_64,3.12.8,2.6.0+cu124,N/A,62.7GB,6,12
+```
+
+Key statistics tracked:
+- **timestamp**: Date and time when the epoch completed
+- **epoch**: Training epoch number
+- **train_loss/val_loss**: Loss on training and validation sets
+- **train_accuracy/val_accuracy**: Accuracy (%) on training and validation sets
+- **samples_processed**: Number of training samples processed in the epoch
+- **epoch_time**: Time taken for this epoch (seconds)
+- **total_time**: Total training time so far (seconds)
+- **learning_rate**: Current learning rate
+- **cpu_memory_mb/gpu_memory_mb**: Memory usage
+- **batch_size**: Training batch size
+- **Hardware info**: CPU model, Python version, PyTorch version, etc.
 
 ## Supported Datasets
 
