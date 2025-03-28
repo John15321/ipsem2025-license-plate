@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional
 
 import psutil
 import torch
+from qiskit_aer.primitives import SamplerV2
 from torch import nn, optim
 
 from ..utils.logging_utils import get_logger
@@ -180,12 +181,22 @@ def train_hybrid_model(
     log_file: Optional[str] = None,
     run_test: bool = False,
     verbose: bool = False,
+    use_gpu_for_qnn: bool = True,
 ) -> Dict[str, Any]:
     """Train the hybrid quantum-classical model."""
     # Select device
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
     logger.info("Using device: %s", device)
+
+    # Setup GPU-accelerated quantum sampler if requested
+    sampler = None
+    if use_gpu_for_qnn and torch.cuda.is_available():
+        logger.info("Creating GPU-accelerated quantum simulator via qiskit-aer-gpu")
+        sampler = SamplerV2(options={"device": "GPU"})
+    else:
+        if use_gpu_for_qnn and not torch.cuda.is_available():
+            logger.warning("GPU requested for QNN but not available")
 
     from ..datasets.custom import CustomImageDataset
     from ..datasets.emnist import EMNISTDataset
@@ -229,7 +240,7 @@ def train_hybrid_model(
         len(val_loader.dataset),  # type: ignore[arg-type]
     )
 
-    # Create model
+    # Create model with GPU sampler if available
     num_classes = dataset.get_num_classes()
     logger.info(
         "Creating hybrid model with %d qubits, %d ansatz repetitions",
@@ -237,7 +248,11 @@ def train_hybrid_model(
         ansatz_reps,
     )
     model = HybridModel(
-        n_qubits=n_qubits, ansatz_reps=ansatz_reps, num_classes=num_classes
+        n_qubits=n_qubits,
+        ansatz_reps=ansatz_reps,
+        num_classes=num_classes,
+        sampler=sampler,
+        use_gpu=use_gpu_for_qnn,
     )
     logger.info(
         "Model created with %d parameters", sum(p.numel() for p in model.parameters())

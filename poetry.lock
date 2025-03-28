@@ -535,6 +535,83 @@ tomli = {version = "*", optional = true, markers = "python_full_version <= \"3.1
 toml = ["tomli ; python_full_version <= \"3.11.0a6\""]
 
 [[package]]
+name = "cudensitymat-cu12"
+version = "0.1.0"
+description = "cuDensityMat - a component of NVIDIA cuQuantum SDK"
+optional = false
+python-versions = "*"
+groups = ["main"]
+markers = "platform_system == \"Linux\" and platform_machine == \"aarch64\""
+files = [
+    {file = "cudensitymat_cu12-0.1.0-py3-none-manylinux2014_aarch64.whl", hash = "sha256:f1dc6e9365ec7d8dcdd3782cc07ac526edf1344b1e6e23bb95e77a37fc1b5648"},
+    {file = "cudensitymat_cu12-0.1.0-py3-none-manylinux2014_x86_64.whl", hash = "sha256:e2d9ccbb712329959ea14cb86572d4ee4ccc1f32f29ccd2386340b4393f34f49"},
+]
+
+[package.dependencies]
+cutensor-cu12 = ">=2.2,<3"
+
+[[package]]
+name = "cuquantum-cu12"
+version = "25.3.0"
+description = "NVIDIA cuQuantum SDK"
+optional = false
+python-versions = "*"
+groups = ["main"]
+markers = "platform_system == \"Linux\" and platform_machine == \"aarch64\""
+files = [
+    {file = "cuquantum_cu12-25.3.0-py3-none-manylinux2014_aarch64.whl", hash = "sha256:9e604fadc38355278aec2fefe6777c2771444b1bd2c3baba8ec362831ee7a739"},
+    {file = "cuquantum_cu12-25.3.0-py3-none-manylinux2014_x86_64.whl", hash = "sha256:2d7bef6330546e48d9e3a874aae420339361f9fe6f4d9cd683a5c698116f08aa"},
+]
+
+[package.dependencies]
+cudensitymat-cu12 = "0.1.0"
+custatevec-cu12 = "1.8.0"
+cutensornet-cu12 = "2.7.0"
+
+[[package]]
+name = "custatevec-cu12"
+version = "1.8.0"
+description = "cuStateVec - a component of NVIDIA cuQuantum SDK"
+optional = false
+python-versions = "*"
+groups = ["main"]
+markers = "platform_system == \"Linux\" and platform_machine == \"aarch64\""
+files = [
+    {file = "custatevec_cu12-1.8.0-py3-none-manylinux2014_aarch64.whl", hash = "sha256:4b69508c1bd4f5b91f381d3f4590613ef53559078fb0543f230c5fe3011d6fbb"},
+    {file = "custatevec_cu12-1.8.0-py3-none-manylinux2014_x86_64.whl", hash = "sha256:9ff2db7f3355c9fb3d643dcf6bf9bfdebc6a7f0b1d284742039148f33c43913d"},
+]
+
+[[package]]
+name = "cutensor-cu12"
+version = "2.2.0"
+description = "NVIDIA cuTENSOR"
+optional = false
+python-versions = "*"
+groups = ["main"]
+markers = "platform_system == \"Linux\" and platform_machine == \"aarch64\""
+files = [
+    {file = "cutensor_cu12-2.2.0-py3-none-manylinux2014_aarch64.whl", hash = "sha256:3b4faf4a036b8b178cb15305e37f9e3263339fc3272c117c568805ce04d39f3e"},
+    {file = "cutensor_cu12-2.2.0-py3-none-manylinux2014_x86_64.whl", hash = "sha256:ecec61eac87a903e74b069dc86e53a273c60f496fd6b7c2203fbc110c8b4819d"},
+    {file = "cutensor_cu12-2.2.0-py3-none-win_amd64.whl", hash = "sha256:445464d39e25d1e67761694a676c21694c37b668a3e7e23df760150957318f91"},
+]
+
+[[package]]
+name = "cutensornet-cu12"
+version = "2.7.0"
+description = "cuTensorNet - a component of NVIDIA cuQuantum SDK"
+optional = false
+python-versions = "*"
+groups = ["main"]
+markers = "platform_system == \"Linux\" and platform_machine == \"aarch64\""
+files = [
+    {file = "cutensornet_cu12-2.7.0-py3-none-manylinux2014_aarch64.whl", hash = "sha256:41d16f9b8551757dc95cfad31e9b06bf902772c3c4dd5fed75b3ac18f67152e8"},
+    {file = "cutensornet_cu12-2.7.0-py3-none-manylinux2014_x86_64.whl", hash = "sha256:ad8e15e0423e1cf2814abbd2d81f63264e064229107f0830db093f2c6c986396"},
+]
+
+[package.dependencies]
+cutensor-cu12 = ">=2.2,<3"
+
+[[package]]
 name = "cycler"
 version = "0.12.1"
 description = "Composable style cycles"
@@ -1788,7 +1865,7 @@ description = "CUBLAS native runtime libraries"
 optional = false
 python-versions = ">=3"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\""
+markers = "platform_system == \"Linux\" and platform_machine == \"aarch64\""
 files = [
     {file = "nvidia_cublas_cu12-12.4.5.8-py3-none-manylinux2014_aarch64.whl", hash = "sha256:0f8aa1706812e00b9f19dfe0cdb3999b092ccb8ca168c0db5b8ea712456fd9b3"},
     {file = "nvidia_cublas_cu12-12.4.5.8-py3-none-manylinux2014_x86_64.whl", hash = "sha256:2fc8da60df463fdefa81e323eef2e36489e1c94335b5358bcb38360adf75ac9b"},
@@ -1830,7 +1907,7 @@ description = "CUDA Runtime native Libraries"
 optional = false
 python-versions = ">=3"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\""
+markers = "platform_system == \"Linux\" and platform_machine == \"aarch64\""
 files = [
     {file = "nvidia_cuda_runtime_cu12-12.4.127-py3-none-manylinux2014_aarch64.whl", hash = "sha256:961fe0e2e716a2a1d967aab7caee97512f71767f852f67432d572e36cb3a11f3"},
     {file = "nvidia_cuda_runtime_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl", hash = "sha256:64403288fa2136ee8e467cdc9c9427e0434110899d07c779f25b5c068934faa5"},
@@ -1891,7 +1968,7 @@ description = "CUDA solver native runtime libraries"
 optional = false
 python-versions = ">=3"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\""
+markers = "platform_system == \"Linux\" and platform_machine == \"aarch64\""
 files = [
     {file = "nvidia_cusolver_cu12-11.6.1.9-py3-none-manylinux2014_aarch64.whl", hash = "sha256:d338f155f174f90724bbde3758b7ac375a70ce8e706d70b018dd3375545fc84e"},
     {file = "nvidia_cusolver_cu12-11.6.1.9-py3-none-manylinux2014_x86_64.whl", hash = "sha256:19e33fa442bcfd085b3086c4ebf7e8debc07cfe01e11513cc6d332fd918ac260"},
@@ -1910,7 +1987,7 @@ description = "CUSPARSE native runtime libraries"
 optional = false
 python-versions = ">=3"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\""
+markers = "platform_system == \"Linux\" and platform_machine == \"aarch64\""
 files = [
     {file = "nvidia_cusparse_cu12-12.3.1.170-py3-none-manylinux2014_aarch64.whl", hash = "sha256:9d32f62896231ebe0480efd8a7f702e143c98cfaa0e8a76df3386c1ba2b54df3"},
     {file = "nvidia_cusparse_cu12-12.3.1.170-py3-none-manylinux2014_x86_64.whl", hash = "sha256:ea4f11a2904e2a8dc4b1833cc1b5181cde564edd0d5cd33e3c168eff2d1863f1"},
@@ -1953,7 +2030,7 @@ description = "Nvidia JIT LTO Library"
 optional = false
 python-versions = ">=3"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\""
+markers = "platform_system == \"Linux\" and platform_machine == \"aarch64\""
 files = [
     {file = "nvidia_nvjitlink_cu12-12.4.127-py3-none-manylinux2014_aarch64.whl", hash = "sha256:4abe7fef64914ccfa909bc2ba39739670ecc9e820c83ccc7a6ed414122599b83"},
     {file = "nvidia_nvjitlink_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl", hash = "sha256:06b3b9b25bf3f8af351d664978ca26a16d2c5127dbd53c0497e28d1fb9611d57"},
@@ -2740,6 +2817,34 @@ crosstalk-pass = ["z3-solver (>=4.7)"]
 csp-layout-pass = ["python-constraint (>=1.4)"]
 qasm3-import = ["qiskit-qasm3-import (>=0.1.0)"]
 visualization = ["Pillow (>=4.2.1)", "matplotlib (>=3.3)", "pydot", "pylatexenc (>=1.4)", "seaborn (>=0.9.0)"]
+
+[[package]]
+name = "qiskit-aer-gpu"
+version = "0.15.1"
+description = "Aer - High performance simulators for Qiskit"
+optional = false
+python-versions = ">=3.7"
+groups = ["main"]
+markers = "platform_system == \"Linux\" and platform_machine == \"aarch64\""
+files = [
+    {file = "qiskit_aer_gpu-0.15.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:f5bf7924c088c6fc2930435318b8cdd63ff7438cae182ee9992227957e4a0e9d"},
+    {file = "qiskit_aer_gpu-0.15.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:da4819ae20f391625e84e1aed55f8d361891699e87d36a07cec76ddd4c3a8eb7"},
+    {file = "qiskit_aer_gpu-0.15.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5b65d98386a703a3ec351ee343169f66072179e92dd61bbf3a035912465bb924"},
+    {file = "qiskit_aer_gpu-0.15.1-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:91cf40d84c4913f695701d9bb513aae4ecbc90225cce486a65095ef5bcabf78c"},
+    {file = "qiskit_aer_gpu-0.15.1-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:f3e3baa65a805036ba580d6ed7c0ff5e38a6b8ac9c9079dd1d26158534a50938"},
+]
+
+[package.dependencies]
+cuquantum-cu12 = ">=23.3.0"
+numpy = ">=1.16.3"
+nvidia-cublas-cu12 = ">=12.1.3.1"
+nvidia-cuda-runtime-cu12 = ">=12.1.105"
+nvidia-cusolver-cu12 = ">=11.4.5.107"
+nvidia-cusparse-cu12 = ">=12.1.0.106"
+nvidia-nvjitlink-cu12 = "*"
+psutil = ">=5"
+qiskit = ">=1.1.0"
+scipy = ">=1.0"
 
 [[package]]
 name = "qiskit-machine-learning"
@@ -3557,6 +3662,11 @@ python-versions = ">=3.9"
 groups = ["main"]
 markers = "platform_system == \"Linux\" and platform_machine == \"aarch64\""
 files = [
+    {file = "torchvision-0.21.0-1-cp310-cp310-manylinux_2_28_aarch64.whl", hash = "sha256:5568c5a1ff1b2ec33127b629403adb530fab81378d9018ca4ed6508293f76e2b"},
+    {file = "torchvision-0.21.0-1-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:ff96666b94a55e802ea6796cabe788541719e6f4905fc59c380fed3517b6a64d"},
+    {file = "torchvision-0.21.0-1-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:ffa2a16499508fe6798323e455f312c7c55f2a88901c9a7c0fb1efa86cf7e327"},
+    {file = "torchvision-0.21.0-1-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:7e9e9afa150e40cd2a8f0701c43cb82a8d724f512896455c0918b987f94b84a4"},
+    {file = "torchvision-0.21.0-1-cp39-cp39-manylinux_2_28_aarch64.whl", hash = "sha256:669575b290ec27304569e188a960d12b907d5173f9cd65e86621d34c4e5b6c30"},
     {file = "torchvision-0.21.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:044ea420b8c6c3162a234cada8e2025b9076fa82504758cd11ec5d0f8cd9fa37"},
     {file = "torchvision-0.21.0-cp310-cp310-manylinux1_x86_64.whl", hash = "sha256:b0c0b264b89ab572888244f2e0bad5b7eaf5b696068fc0b93e96f7c3c198953f"},
     {file = "torchvision-0.21.0-cp310-cp310-manylinux_2_28_aarch64.whl", hash = "sha256:54815e0a56dde95cc6ec952577f67e0dc151eadd928e8d9f6a7f821d69a4a734"},
@@ -3984,4 +4094,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.9, <4"
-content-hash = "52e670dd5b69055f2e0d14d7dee64d76e8d3ffbbf7c8421da7d11aefb40d779a"
+content-hash = "cf5517dd77e331cc63fa04557951e04d26b4e3442a19778ecbd76b6907d9d71f"

@@ -7,6 +7,7 @@ from typing import Dict, Optional
 import torch
 from qiskit.circuit.library import RealAmplitudes, ZZFeatureMap
 from qiskit.primitives import Sampler
+from qiskit_aer.primitives import SamplerV2
 from qiskit_machine_learning.connectors import TorchConnector
 from qiskit_machine_learning.neural_networks import SamplerQNN
 from torch import nn
@@ -37,6 +38,7 @@ class HybridModel(nn.Module):
         num_classes=2,
         input_channels=1,
         sampler: Optional[Sampler] = None,
+        use_gpu: bool = True,
     ):
         super().__init__()
         logger.info(
@@ -59,6 +61,7 @@ class HybridModel(nn.Module):
         self.n_qubits = n_qubits
         self.ansatz_reps = ansatz_reps
         self.num_classes = num_classes
+        self.use_gpu = use_gpu
 
         # Classical CNN feature extractor for 64x64 pixel images
         # After 3 MaxPool2D layers (each dividing by 2): 64x64 -> 32x32 -> 16x16 -> 8x8
@@ -102,12 +105,29 @@ class HybridModel(nn.Module):
         # Combine feature map and ansatz
         circuit = self.feature_map.compose(self.ansatz)
 
+        # Setup sampler with GPU acceleration if requested
+        if sampler is None:
+            if use_gpu and torch.cuda.is_available():
+                logger.info(
+                    "Using GPU-accelerated quantum simulator via qiskit-aer-gpu"
+                )
+                self.sampler = SamplerV2(options={"device": "GPU"})
+            else:
+                if use_gpu and not torch.cuda.is_available():
+                    logger.warning(
+                        "GPU requested but not available, falling back to CPU"
+                    )
+                logger.info("Using CPU-based quantum simulator")
+                self.sampler = Sampler()
+        else:
+            self.sampler = sampler
+
         # Quantum layer setup
         self.qnn = SamplerQNN(
             circuit=circuit,
             input_params=self.feature_map.parameters,
             weight_params=self.ansatz.parameters,
-            sampler=sampler or Sampler(),
+            sampler=self.sampler,
             input_gradients=True,
         )
         self.quantum_layer = TorchConnector(self.qnn)
