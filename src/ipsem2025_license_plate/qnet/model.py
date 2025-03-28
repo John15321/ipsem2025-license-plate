@@ -4,9 +4,13 @@
 
 from typing import Dict, Optional
 
+import qiskit_aer
 import torch
+from qiskit import transpile
 from qiskit.circuit.library import RealAmplitudes, ZZFeatureMap
 from qiskit.primitives import Sampler
+from qiskit.utils import QuantumInstance
+from qiskit_aer.backends import AerSimulator
 from qiskit_machine_learning.connectors import TorchConnector
 from qiskit_machine_learning.neural_networks import SamplerQNN
 from torch import nn
@@ -37,6 +41,7 @@ class HybridModel(nn.Module):
         num_classes=2,
         input_channels=1,
         sampler: Optional[Sampler] = None,
+        use_gpu: bool = True,
     ):
         super().__init__()
         logger.info(
@@ -59,6 +64,7 @@ class HybridModel(nn.Module):
         self.n_qubits = n_qubits
         self.ansatz_reps = ansatz_reps
         self.num_classes = num_classes
+        self.use_gpu = use_gpu
 
         # Classical CNN feature extractor for 64x64 pixel images
         # After 3 MaxPool2D layers (each dividing by 2): 64x64 -> 32x32 -> 16x16 -> 8x8
@@ -102,14 +108,75 @@ class HybridModel(nn.Module):
         # Combine feature map and ansatz
         circuit = self.feature_map.compose(self.ansatz)
 
+        # Setup GPU-accelerated quantum instance
+        if use_gpu and torch.cuda.is_available():
+            logger.info("Using GPU-accelerated quantum simulator via qiskit-aer-gpu")
+            try:
+                # Create AerSimulator with GPU
+                backend = AerSimulator(method="statevector", device="GPU")
+
+                # First explicitly decompose the circuit
+                logger.info("Decomposing quantum circuit for GPU compatibility")
+                circuit = circuit.decompose(reps=3)  # Multiple levels deep
+
+                # Transpile with explicit basis gates for Aer
+                logger.info("Transpiling quantum circuit for GPU execution")
+                circuit = transpile(
+                    circuit,
+                    backend=backend,
+                    basis_gates=["u1", "u2", "u3", "cx", "rx", "ry", "rz", "x", "h"],
+                    optimization_level=1,
+                )
+                logger.info(f"Circuit depth after transpilation: {circuit.depth()}")
+
+                # Create a sampler or use the provided one
+                if sampler is None:
+                    # Use QuantumInstance approach with the AerSimulator
+                    self.quantum_instance = QuantumInstance(
+                        backend=backend,
+                        shots=1024,
+                        optimization_level=1,
+                        seed_simulator=42,
+                        seed_transpiler=42,
+                    )
+                    logger.info("GPU acceleration configured for quantum simulation")
+                else:
+                    self.quantum_instance = None
+                    self.sampler = sampler
+            except Exception as e:
+                logger.warning(f"Failed to initialize GPU quantum simulator: {e}")
+                logger.info("Falling back to CPU-based quantum simulation")
+                self.quantum_instance = None
+                self.sampler = Sampler() if sampler is None else sampler
+        else:
+            if use_gpu and not torch.cuda.is_available():
+                logger.warning("GPU requested but not available, falling back to CPU")
+            logger.info("Using CPU-based quantum simulator")
+            self.quantum_instance = None
+            self.sampler = Sampler() if sampler is None else sampler
+
         # Quantum layer setup
-        self.qnn = SamplerQNN(
-            circuit=circuit,
-            input_params=self.feature_map.parameters,
-            weight_params=self.ansatz.parameters,
-            sampler=sampler or Sampler(),
-            input_gradients=True,
-        )
+        if self.quantum_instance is not None:
+            # Create SamplerQNN with QuantumInstance
+            logger.info("Creating SamplerQNN with QuantumInstance")
+            self.qnn = SamplerQNN(
+                circuit=circuit,
+                input_params=self.feature_map.parameters,
+                weight_params=self.ansatz.parameters,
+                quantum_instance=self.quantum_instance,
+                input_gradients=True,
+            )
+        else:
+            # Create SamplerQNN with Sampler
+            logger.info("Creating SamplerQNN with Sampler")
+            self.qnn = SamplerQNN(
+                circuit=circuit,
+                input_params=self.feature_map.parameters,
+                weight_params=self.ansatz.parameters,
+                sampler=self.sampler,
+                input_gradients=True,
+            )
+
         self.quantum_layer = TorchConnector(self.qnn)
 
         # Final classification layer
@@ -161,4 +228,5 @@ class HybridModel(nn.Module):
             "classical_params": sum(p.numel() for p in self.classical_net.parameters()),
             "quantum_params": len(self.ansatz.parameters),
             "total_params": sum(p.numel() for p in self.parameters()),
+            "using_gpu_quantum": self.use_gpu and torch.cuda.is_available(),
         }

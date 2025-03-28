@@ -62,6 +62,11 @@ def train_command(
     verbose: bool = typer.Option(
         False, "--verbose", "-v", help="Enable verbose output"
     ),
+    use_gpu_for_qnn: bool = typer.Option(
+        True,
+        "--use-gpu-for-qnn/--no-gpu-for-qnn",
+        help="Use GPU acceleration for quantum circuit simulation",
+    ),
 ) -> int:
     """Train a hybrid quantum-classical neural network."""
     try:
@@ -100,6 +105,7 @@ def train_command(
         logger.debug("  model_save_path: %s", model_save_path)
         logger.debug("  stats_file: %s", stats_file)
         logger.debug("  run_test: %s", run_test)
+        logger.debug("  use_gpu_for_qnn: %s", use_gpu_for_qnn)
 
         stats_file = Path(stats_file) if stats_file else None  # type: ignore
         model_save_path = str(model_save_path) if model_save_path else None  # type: ignore
@@ -119,6 +125,7 @@ def train_command(
             log_file=log_file,
             run_test=run_test,
             verbose=verbose,
+            use_gpu_for_qnn=use_gpu_for_qnn,
         )
         logger.info("Training completed successfully")
         if result["test_metrics"]:
