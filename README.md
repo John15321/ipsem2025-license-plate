@@ -22,6 +22,11 @@ The package comes with several modules for license plate recognition:
   - Configurable logging system with console and file support
   - Type-safe interfaces and comprehensive error handling
 
+- **License Plate Detection**: YOLOv5-based license plate localization ([Documentation](src/ipsem2025_license_plate/plate_extraction/README.md))
+  - Uses a trained YOLOv5 model to detect and extract license plates from images
+  - Provides a CLI tool (`ipsem2025-plate-recognizer`) for easy inference on images and datasets
+
+
 # Development
 
 ## Tools and local environment
