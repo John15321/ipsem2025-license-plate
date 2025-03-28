@@ -9,8 +9,9 @@ from typing import Any, Dict, Optional
 
 import psutil
 import torch
-from qiskit_aer.primitives import SamplerV2
 from torch import nn, optim
+from qiskit_aer.primitives import SamplerV2
+import qiskit_aer
 
 from ..utils.logging_utils import get_logger
 from .model import HybridModel
@@ -193,7 +194,20 @@ def train_hybrid_model(
     sampler = None
     if use_gpu_for_qnn and torch.cuda.is_available():
         logger.info("Creating GPU-accelerated quantum simulator via qiskit-aer-gpu")
-        sampler = SamplerV2(options={"device": "GPU"})
+        try:
+            # Create simulator with GPU method
+            backend = qiskit_aer.AerSimulator()
+            
+            # Configure GPU in a way compatible with qiskit-aer-gpu
+            backend.set_options(device='GPU')
+            
+            # Create SamplerV2 with the configured backend
+            sampler = SamplerV2(backend=backend)
+            logger.info("GPU acceleration successfully enabled for quantum simulation")
+        except Exception as e:
+            logger.warning(f"Failed to initialize GPU quantum simulator: {e}")
+            logger.info("Falling back to CPU-based quantum simulation")
+            sampler = None
     else:
         if use_gpu_for_qnn and not torch.cuda.is_available():
             logger.warning("GPU requested for QNN but not available")

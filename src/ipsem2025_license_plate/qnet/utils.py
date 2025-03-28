@@ -21,7 +21,7 @@ logger = get_logger(__name__)
 
 def get_hardware_info() -> Dict[str, str]:
     """Collect system hardware information."""
-    return {
+    hardware_info = {
         "cpu_model": platform.processor(),
         "python_version": platform.python_version(),
         "torch_version": torch.__version__,
@@ -30,6 +30,14 @@ def get_hardware_info() -> Dict[str, str]:
         "cpu_count": str(psutil.cpu_count(logical=False)),
         "cpu_threads": str(psutil.cpu_count(logical=True)),
     }
+    
+    # Add GPU information if available
+    if torch.cuda.is_available():
+        hardware_info["gpu_model"] = torch.cuda.get_device_name(0)
+        hardware_info["gpu_count"] = str(torch.cuda.device_count())
+        hardware_info["gpu_memory"] = f"{torch.cuda.get_device_properties(0).total_memory / (1024**3):.1f}GB"
+        
+    return hardware_info
 
 
 def log_training_stats(stats_file: Path, stats: dict):

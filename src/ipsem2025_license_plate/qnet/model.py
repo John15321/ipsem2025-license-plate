@@ -7,10 +7,11 @@ from typing import Dict, Optional
 import torch
 from qiskit.circuit.library import RealAmplitudes, ZZFeatureMap
 from qiskit.primitives import Sampler
-from qiskit_aer.primitives import SamplerV2
 from qiskit_machine_learning.connectors import TorchConnector
 from qiskit_machine_learning.neural_networks import SamplerQNN
 from torch import nn
+from qiskit_aer.primitives import SamplerV2
+import qiskit_aer
 
 from ..utils.logging_utils import get_logger
 
@@ -108,20 +109,29 @@ class HybridModel(nn.Module):
         # Setup sampler with GPU acceleration if requested
         if sampler is None:
             if use_gpu and torch.cuda.is_available():
-                logger.info(
-                    "Using GPU-accelerated quantum simulator via qiskit-aer-gpu"
-                )
-                self.sampler = SamplerV2(options={"device": "GPU"})
+                logger.info("Using GPU-accelerated quantum simulator via qiskit-aer-gpu")
+                try:
+                    # Create simulator with GPU method
+                    backend = qiskit_aer.AerSimulator()
+                    
+                    # Configure GPU in a way compatible with qiskit-aer-gpu
+                    backend.set_options(device='GPU')
+                    
+                    # Create SamplerV2 with the configured backend
+                    self.sampler = SamplerV2(backend=backend)
+                    logger.info("GPU acceleration successfully enabled for quantum simulation")
+                except Exception as e:
+                    logger.warning(f"Failed to initialize GPU quantum simulator: {e}")
+                    logger.info("Falling back to CPU-based quantum simulation")
+                    self.sampler = Sampler()
             else:
                 if use_gpu and not torch.cuda.is_available():
-                    logger.warning(
-                        "GPU requested but not available, falling back to CPU"
-                    )
+                    logger.warning("GPU requested but not available, falling back to CPU")
                 logger.info("Using CPU-based quantum simulator")
                 self.sampler = Sampler()
         else:
             self.sampler = sampler
-
+            
         # Quantum layer setup
         self.qnn = SamplerQNN(
             circuit=circuit,
@@ -181,4 +191,5 @@ class HybridModel(nn.Module):
             "classical_params": sum(p.numel() for p in self.classical_net.parameters()),
             "quantum_params": len(self.ansatz.parameters),
             "total_params": sum(p.numel() for p in self.parameters()),
+            "using_gpu_quantum": self.use_gpu and torch.cuda.is_available(),
         }
