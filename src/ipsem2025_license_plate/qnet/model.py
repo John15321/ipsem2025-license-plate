@@ -9,7 +9,8 @@ import torch
 from qiskit import transpile
 from qiskit.circuit.library import RealAmplitudes, ZZFeatureMap
 from qiskit.primitives import Sampler
-from qiskit_aer.primitives import SamplerV2
+from qiskit.utils import QuantumInstance
+from qiskit_aer.backends import AerSimulator
 from qiskit_machine_learning.connectors import TorchConnector
 from qiskit_machine_learning.neural_networks import SamplerQNN
 from torch import nn
@@ -107,83 +108,75 @@ class HybridModel(nn.Module):
         # Combine feature map and ansatz
         circuit = self.feature_map.compose(self.ansatz)
 
-        # Setup GPU-accelerated sampler if requested
-        aer_simulator = None
-        if sampler is None:
-            if use_gpu and torch.cuda.is_available():
-                logger.info(
-                    "Using GPU-accelerated quantum simulator via qiskit-aer-gpu"
+        # Setup GPU-accelerated quantum instance
+        if use_gpu and torch.cuda.is_available():
+            logger.info("Using GPU-accelerated quantum simulator via qiskit-aer-gpu")
+            try:
+                # Create AerSimulator with GPU
+                backend = AerSimulator(method="statevector", device="GPU")
+
+                # First explicitly decompose the circuit
+                logger.info("Decomposing quantum circuit for GPU compatibility")
+                circuit = circuit.decompose(reps=3)  # Multiple levels deep
+
+                # Transpile with explicit basis gates for Aer
+                logger.info("Transpiling quantum circuit for GPU execution")
+                circuit = transpile(
+                    circuit,
+                    backend=backend,
+                    basis_gates=["u1", "u2", "u3", "cx"],
+                    optimization_level=1,
                 )
-                try:
-                    # Create simulator with GPU method
-                    aer_simulator = qiskit_aer.AerSimulator()
-                    aer_simulator.set_options(device="GPU")
+                logger.info(f"Circuit depth after transpilation: {circuit.depth()}")
 
-                    # Configure GPU in the options dictionary
-                    backend_options = {"method": "statevector"}
-                    run_options = {"device": "GPU"}
-
-                    # Create SamplerV2 with the correct options structure
-                    self.sampler = SamplerV2(
-                        options={
-                            "backend_options": backend_options,
-                            "run_options": run_options,
-                        }
+                # Create a sampler or use the provided one
+                if sampler is None:
+                    # Use QuantumInstance approach with the AerSimulator
+                    self.quantum_instance = QuantumInstance(
+                        backend=backend,
+                        shots=1024,
+                        optimization_level=1,
+                        seed_simulator=42,
+                        seed_transpiler=42,
                     )
-                    logger.info(
-                        "GPU acceleration successfully enabled for quantum simulation"
-                    )
-                except Exception as e:
-                    logger.warning(f"Failed to initialize GPU quantum simulator: {e}")
-                    logger.info("Falling back to CPU-based quantum simulation")
-                    self.sampler = Sampler()
-                    aer_simulator = None
-            else:
-                if use_gpu and not torch.cuda.is_available():
-                    logger.warning(
-                        "GPU requested but not available, falling back to CPU"
-                    )
-                logger.info("Using CPU-based quantum simulator")
-                self.sampler = Sampler()
+                    logger.info("GPU acceleration configured for quantum simulation")
+                else:
+                    self.quantum_instance = None
+                    self.sampler = sampler
+            except Exception as e:
+                logger.warning(f"Failed to initialize GPU quantum simulator: {e}")
+                logger.info("Falling back to CPU-based quantum simulation")
+                self.quantum_instance = None
+                self.sampler = Sampler() if sampler is None else sampler
         else:
-            self.sampler = sampler
-
-        # Force decomposition and transpilation of the circuit for GPU simulation
-        if aer_simulator:
-            logger.info(
-                "Forcing decomposition of quantum circuit for GPU compatibility"
-            )
-            # First explicitly decompose the circuit to break down high-level instructions
-            circuit = circuit.decompose(reps=3)  # Decompose multiple levels deep
-
-            # Then transpile the circuit with explicitly specified basis gates
-            logger.info("Transpiling quantum circuit with explicit basis gates")
-            circuit = transpile(
-                circuit,
-                backend=aer_simulator,
-                basis_gates=["rx", "ry", "rz", "cx", "x", "h"],
-            )
-            logger.info(
-                f"Circuit successfully decomposed and transpiled, depth: {circuit.depth()}"
-            )
-
-            # Print some info about the circuit to verify it's properly decomposed
-            logger.debug(
-                f"Transpiled circuit instructions: {[op.name for op in circuit.data]}"
-            )
-
-        # Extract parameters from the transpiled circuit
-        input_params = self.feature_map.parameters
-        weight_params = self.ansatz.parameters
+            if use_gpu and not torch.cuda.is_available():
+                logger.warning("GPU requested but not available, falling back to CPU")
+            logger.info("Using CPU-based quantum simulator")
+            self.quantum_instance = None
+            self.sampler = Sampler() if sampler is None else sampler
 
         # Quantum layer setup
-        self.qnn = SamplerQNN(
-            circuit=circuit,
-            input_params=input_params,
-            weight_params=weight_params,
-            sampler=self.sampler,
-            input_gradients=True,
-        )
+        if self.quantum_instance is not None:
+            # Create SamplerQNN with QuantumInstance
+            logger.info("Creating SamplerQNN with QuantumInstance")
+            self.qnn = SamplerQNN(
+                circuit=circuit,
+                input_params=self.feature_map.parameters,
+                weight_params=self.ansatz.parameters,
+                quantum_instance=self.quantum_instance,
+                input_gradients=True,
+            )
+        else:
+            # Create SamplerQNN with Sampler
+            logger.info("Creating SamplerQNN with Sampler")
+            self.qnn = SamplerQNN(
+                circuit=circuit,
+                input_params=self.feature_map.parameters,
+                weight_params=self.ansatz.parameters,
+                sampler=self.sampler,
+                input_gradients=True,
+            )
+
         self.quantum_layer = TorchConnector(self.qnn)
 
         # Final classification layer
