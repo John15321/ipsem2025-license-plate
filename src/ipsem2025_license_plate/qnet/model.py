@@ -6,6 +6,7 @@ from typing import Dict, Optional
 
 import qiskit_aer
 import torch
+from qiskit import transpile
 from qiskit.circuit.library import RealAmplitudes, ZZFeatureMap
 from qiskit.primitives import Sampler
 from qiskit_aer.primitives import SamplerV2
@@ -106,14 +107,19 @@ class HybridModel(nn.Module):
         # Combine feature map and ansatz
         circuit = self.feature_map.compose(self.ansatz)
 
-        # Setup sampler with GPU acceleration if requested
+        # Setup GPU-accelerated sampler if requested
+        aer_simulator = None
         if sampler is None:
             if use_gpu and torch.cuda.is_available():
                 logger.info(
                     "Using GPU-accelerated quantum simulator via qiskit-aer-gpu"
                 )
                 try:
-                    # Configure GPU in the options dictionary, not as a direct backend parameter
+                    # Create simulator with GPU method
+                    aer_simulator = qiskit_aer.AerSimulator()
+                    aer_simulator.set_options(device="GPU")
+
+                    # Configure GPU in the options dictionary
                     backend_options = {"method": "statevector"}
                     run_options = {"device": "GPU"}
 
@@ -131,6 +137,7 @@ class HybridModel(nn.Module):
                     logger.warning(f"Failed to initialize GPU quantum simulator: {e}")
                     logger.info("Falling back to CPU-based quantum simulation")
                     self.sampler = Sampler()
+                    aer_simulator = None
             else:
                 if use_gpu and not torch.cuda.is_available():
                     logger.warning(
@@ -140,6 +147,12 @@ class HybridModel(nn.Module):
                 self.sampler = Sampler()
         else:
             self.sampler = sampler
+
+        # Transpile the circuit to ensure compatibility with Aer simulator
+        if aer_simulator:
+            logger.info("Transpiling quantum circuit for GPU simulation compatibility")
+            circuit = transpile(circuit, backend=aer_simulator)
+            logger.info(f"Circuit transpiled, depth: {circuit.depth()}")
 
         # Quantum layer setup
         self.qnn = SamplerQNN(
@@ -188,6 +201,9 @@ class HybridModel(nn.Module):
 
     def get_circuit_depth(self) -> int:
         """Returns the depth of the quantum circuit used in the model."""
+        # Since we're using a transpiled circuit inside the QNN,
+        # we can't directly access its depth here,
+        # but we can estimate based on the original feature map and ansatz
         return self.feature_map.depth() + self.ansatz.depth()
 
     def get_model_info(self) -> Dict[str, object]:
