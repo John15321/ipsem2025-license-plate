@@ -124,7 +124,7 @@ class HybridModel(nn.Module):
                 circuit = transpile(
                     circuit,
                     backend=backend,
-                    basis_gates=["u1", "u2", "u3", "cx"],
+                    basis_gates=["u1", "u2", "u3", "cx", "rx", "ry", "rz", "x", "h"],
                     optimization_level=1,
                 )
                 logger.info(f"Circuit depth after transpilation: {circuit.depth()}")
