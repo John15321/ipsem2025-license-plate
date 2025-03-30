@@ -26,6 +26,17 @@ The package comes with several modules for license plate recognition:
   - Uses a trained YOLOv5 model to detect and extract license plates from images
   - Provides a CLI tool (`ipsem2025-plate-recognizer`) for easy inference on images and datasets
 
+- **License Plate Character Extraction**: Character extraction pipeline ([Documentation](src/ipsem2025_license_plate/plate_character_extraction/README.md))
+
+- Perspective Correction: Automatically corrects the perspective of license plate images to improve character extraction accuracy
+
+- Character Segmentation: Extracts individual characters from corrected license plate images, filtering out noise
+
+- OCR Integration: Performs OCR recognition on extracted characters to generate labeled datasets
+
+- Dataset Generation: Creates structured labeled datasets for training OCR models, including image-label pairs organized by license plate
+
+
 
 # Development
 

@@ -2,6 +2,34 @@
 
 This package provides tools for processing license plate images, correcting their perspective, extracting characters, and generating labeled datasets for OCR training.
 
+## Installation
+
+### Prerequisites
+
+This package requires Tesseract-OCR for Optical Character Recognition (OCR). You need to install Tesseract before running the scripts.
+
+#### Installing Tesseract on Linux (Ubuntu/Debian)
+```bash
+sudo apt update
+sudo apt install -y tesseract-ocr
+```
+
+#### Installing Tesseract on macOS (using Homebrew)
+```bash
+brew install tesseract
+```
+
+#### Installing Tesseract on Windows
+1. Download the latest Tesseract installer from: [https://github.com/UB-Mannheim/tesseract/wiki](https://github.com/UB-Mannheim/tesseract/wiki)
+2. Run the installer and follow the instructions
+3. Add the Tesseract installation path to your system's environment variables (e.g., `C:\Program Files\Tesseract-OCR`)
+
+#### Verifying Installation
+After installation, verify that Tesseract is available by running:
+```bash
+tesseract --version
+```
+
 ## Scripts
 
 ### 1. Correct Perspective (`correct_perspective.py`)
@@ -118,3 +146,4 @@ output_folder/
 - For optimal results, use high-quality license plate images
 - The `generate_dataset_with_labels.py` script now includes perspective correction automatically
 - Character extraction from license plates is now organized by the original license plate names
+
