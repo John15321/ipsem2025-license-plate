@@ -1,3 +1,10 @@
+## [1.3.1](https://github.com/John15321/ipsem2025-license-plate/compare/v1.3.0...v1.3.1) (2025-03-30)
+
+
+### Bug Fixes
+
+* **docs:** Clean up README formatting for license plate character extraction features ([92042de](https://github.com/John15321/ipsem2025-license-plate/commit/92042ded914cfe77d5b721d034b8e5ca85001639))
+
 # [1.3.0](https://github.com/John15321/ipsem2025-license-plate/compare/v1.2.0...v1.3.0) (2025-03-30)
 
 
