@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/John15321/ipsem2025-license-plate/compare/v1.2.0...v1.3.0) (2025-03-30)
+
+
+### Features
+
+* **docs:** Update README to include new features ([c8bdc68](https://github.com/John15321/ipsem2025-license-plate/commit/c8bdc6848c970cb234ba5871872c090bde93d533))
+
 # [1.2.0](https://github.com/John15321/ipsem2025-license-plate/compare/v1.1.0...v1.2.0) (2025-03-27)
 
 
