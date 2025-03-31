@@ -6,7 +6,7 @@ from typing import Dict, Optional
 
 import qiskit_aer
 import torch
-from qiskit import transpile
+from qiskit import QuantumCircuit, transpile
 from qiskit.circuit.library import RealAmplitudes, ZZFeatureMap
 from qiskit.primitives import Sampler
 from qiskit_aer.primitives import SamplerV2
@@ -95,7 +95,7 @@ class HybridModel(nn.Module):
 
         # Quantum circuit setup
         logger.debug("Creating quantum feature map with %s qubits", n_qubits)
-        self.feature_map = ZZFeatureMap(feature_dimension=n_qubits, reps=1)
+        self.feature_map = ZZFeatureMap(feature_dimension=n_qubits, reps=2)
 
         logger.debug(
             "Creating RealAmplitudes ansatz with %s qubits, %s repetitions",
@@ -105,10 +105,15 @@ class HybridModel(nn.Module):
         self.ansatz = RealAmplitudes(num_qubits=n_qubits, reps=ansatz_reps)
 
         # Combine feature map and ansatz
-        circuit = self.feature_map.compose(self.ansatz)
+        # circuit = self.feature_map.compose(self.ansatz)
+        circuit = QuantumCircuit(n_qubits)
+        circuit.append(self.feature_map, range(n_qubits))
+        circuit.append(self.ansatz, range(n_qubits))
 
         # Setup GPU-accelerated sampler if requested
         aer_simulator = None
+        logger.info("use_gpu: %s", use_gpu)
+        logger.info("TORCH: %s", torch.cuda.is_available())
         if sampler is None:
             if use_gpu and torch.cuda.is_available():
                 logger.info(
