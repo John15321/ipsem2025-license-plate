@@ -5,13 +5,14 @@
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 import psutil
 import qiskit_aer
 import torch
 from qiskit_aer.primitives import SamplerV2
 from torch import nn, optim
+from torch.optim import LBFGS
 
 from ..utils.logging_utils import get_logger
 from .model import HybridModel
@@ -25,16 +26,35 @@ def train_model(
     model,
     train_loader,
     val_loader,
-    device="cpu",
+    device: Optional[torch.device] = None,
     epochs=3,
     stats_file: Optional[Path] = None,
+    learning_rate: float = 1e-3,
 ):
-    """Train the hybrid model using cross entropy loss and Adam optimizer."""
+    """Train the hybrid model using cross entropy loss and Adam optimizer.
+
+    Args:
+        model: The HybridModel to train
+        train_loader: DataLoader for training data
+        val_loader: DataLoader for validation data
+        device: Device to use for training (torch.device object)
+        epochs: Number of training epochs
+        stats_file: Path to save training statistics
+        learning_rate: Learning rate for optimizer
+
+    Returns:
+        List of training statistics dictionaries, one per epoch
+    """
+    # Set device if not provided
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     logger.info("Starting training for %s epochs on %s", epochs, device)
 
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=1e-3)
-    lr = 1e-3
+    criterion = nn.MSELoss()
+    # optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = LBFGS(model.parameters(), learning_rate=learning_rate)
+
 
     model.to(device)
 
@@ -61,14 +81,14 @@ def train_model(
             for batch_idx, (images, labels) in enumerate(train_loader, 1):
                 images, labels = images.to(device), labels.to(device)
 
-                optimizer.zero_grad()
+                optimizer.zero_grad(set_to_none=True)  # More efficient version
                 outputs = model(images)
                 loss = criterion(outputs, labels)
                 loss.backward()
                 optimizer.step()
 
                 # Memory tracking
-                if device == "cuda":
+                if device.type == "cuda":
                     current_memory = torch.cuda.memory_allocated() / 1024**2
                     peak_memory = max(peak_memory, current_memory)
 
@@ -141,12 +161,13 @@ def train_model(
             "samples_processed": total_samples,
             "epoch_time": epoch_time,
             "total_time": time.time() - total_start_time,
-            "learning_rate": lr,
+            "learning_rate": learning_rate,
             "cpu_memory_mb": psutil.Process().memory_info().rss / 1024**2,
             "gpu_memory_mb": (
-                torch.cuda.memory_allocated() / 1024**2 if device == "cuda" else 0
+                torch.cuda.memory_allocated() / 1024**2 if device.type == "cuda" else 0
             ),
             "batch_size": train_loader.batch_size,
+            "device": str(device),  # Include device info in stats
             **hardware_info,
         }
 
@@ -167,14 +188,16 @@ def train_model(
 
 
 def train_hybrid_model(
-    n_qubits: int = 2,
-    ansatz_reps: int = 1,
+    n_qubits: int = 6,
+    ansatz_reps: int = 2,
     epochs: int = 3,
     batch_size: int = 32,
     train_ratio: float = 0.7,
     val_ratio: float = 0.15,
     learning_rate: float = 1e-3,
-    device: Optional[str] = None,
+    device: Optional[
+        Union[str, torch.device]
+    ] = None,  # Accept both string and device objects
     dataset_type: str = "emnist",
     dataset_path: str = "data",
     model_save_path: Optional[str] = None,
@@ -184,10 +207,42 @@ def train_hybrid_model(
     verbose: bool = False,
     use_gpu_for_qnn: bool = True,
 ) -> Dict[str, Any]:
-    """Train the hybrid quantum-classical model."""
+    """Train the hybrid quantum-classical model.
+
+    Args:
+        n_qubits: Number of qubits in the quantum circuit (default: 6).
+            More qubits allow for more complex patterns recognition,
+            suitable for both letters and numbers in license plates.
+        ansatz_reps: Number of repetitions in the RealAmplitudes ansatz (default: 2).
+            Higher values create more expressive quantum circuits.
+        epochs: Number of training epochs.
+        batch_size: Batch size for training.
+        train_ratio: Ratio of data used for training.
+        val_ratio: Ratio of data used for validation.
+        learning_rate: Learning rate for optimizer.
+        device: Device to use for classical computation (torch.device object or string 'cpu'/'cuda').
+        dataset_type: Type of dataset ('emnist', 'mnist', or 'custom').
+        dataset_path: Path to dataset.
+        model_save_path: Path to save trained model.
+        stats_file: Path to save training statistics.
+        log_file: Path to save log output.
+        run_test: Whether to run evaluation after training.
+        verbose: Enable verbose output.
+        use_gpu_for_qnn: Whether to use GPU acceleration for quantum circuit simulation.
+
+    Returns:
+        A dictionary containing the trained model, training stats, and test metrics.
+    """
     logger.info("===========================================================")
     logger.info("Starting hybrid quantum-classical neural network training")
     logger.info("===========================================================")
+
+    # Convert string device specification to torch.device if needed
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    elif isinstance(device, str):
+        device = torch.device(device)
+
     logger.info("Configuration:")
     logger.info(
         "  - Quantum configuration: %d qubits, %d ansatz repetitions",
@@ -196,17 +251,13 @@ def train_hybrid_model(
     )
     logger.info("  - Training parameters: %d epochs, batch size %d", epochs, batch_size)
     logger.info("  - Dataset: %s from %s", dataset_type, dataset_path)
+    logger.info("  - Device: %s", device)
     logger.info(
         "  - Data split: %.1f%% train, %.1f%% validation, %.1f%% test",
         train_ratio * 100,
         val_ratio * 100,
         (1 - train_ratio - val_ratio) * 100,
     )
-
-    # Select device
-    if device is None:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-    logger.info("Using device for classical computation: %s", device)
 
     # Log hardware information
     hw_info = get_hardware_info()
@@ -219,14 +270,14 @@ def train_hybrid_model(
     )
     logger.info("  - Memory: %s", hw_info.get("total_memory", "Unknown"))
 
-    if torch.cuda.is_available():
+    if device.type == "cuda":
         logger.info("  - GPU: %s", hw_info.get("gpu_model", "Unknown"))
         logger.info("  - GPU Memory: %s", hw_info.get("gpu_memory", "Unknown"))
 
     # Setup GPU-accelerated quantum sampler if requested
     logger.info("Initializing quantum simulation backend...")
     sampler = None
-    if use_gpu_for_qnn and torch.cuda.is_available():
+    if use_gpu_for_qnn and device.type == "cuda":
         logger.info("Creating GPU-accelerated quantum simulator via qiskit-aer-gpu")
         try:
             # Configure GPU in the options dictionary, not as a direct backend parameter
@@ -243,7 +294,7 @@ def train_hybrid_model(
             logger.info("Falling back to CPU-based quantum simulation")
             sampler = None
     else:
-        if use_gpu_for_qnn and not torch.cuda.is_available():
+        if use_gpu_for_qnn and device.type != "cuda":
             logger.warning("GPU requested for QNN but not available")
             logger.info("Using CPU-based quantum simulation")
 
@@ -308,7 +359,9 @@ def train_hybrid_model(
         n_qubits=n_qubits,
         ansatz_reps=ansatz_reps,
         num_classes=num_classes,
-        use_gpu=use_gpu_for_qnn,
+        use_gpu=use_gpu_for_qnn and device.type == "cuda",
+        sampler=sampler,
+        device=device,  # Pass the device to the model
     )
     model_info = model.get_model_info()
     logger.info(
@@ -337,6 +390,7 @@ def train_hybrid_model(
         device=device,
         epochs=epochs,
         stats_file=stats_file,
+        learning_rate=learning_rate,
     )
 
     # Run test if requested
@@ -359,7 +413,7 @@ def train_hybrid_model(
             "training_epochs": epochs,
             "batch_size": batch_size,
             "learning_rate": learning_rate,
-            "device": device,
+            "device": str(device),
             "timestamp": datetime.now().isoformat(),
         }
         save_model(model, save_path, metadata)

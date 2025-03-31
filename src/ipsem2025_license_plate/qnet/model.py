@@ -2,7 +2,7 @@
 
 # pylint: disable=too-many-instance-attributes,too-many-arguments,too-many-positional-arguments
 
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
 
 import qiskit_aer
 import torch
@@ -11,8 +11,10 @@ from qiskit.circuit.library import RealAmplitudes, ZZFeatureMap
 from qiskit.primitives import Sampler
 from qiskit_aer.primitives import SamplerV2
 from qiskit_machine_learning.connectors import TorchConnector
-from qiskit_machine_learning.neural_networks import SamplerQNN
+from qiskit_machine_learning.neural_networks import SamplerQNN, EstimatorQNN
+from qiskit_machine_learning.utils import algorithm_globals
 from torch import nn
+from qiskit.primitives import StatevectorEstimator as Estimator
 
 from ..utils.logging_utils import get_logger
 
@@ -35,19 +37,28 @@ class HybridModel(nn.Module):
 
     def __init__(
         self,
-        n_qubits=2,
-        ansatz_reps=1,
-        num_classes=2,
+        n_qubits=6,  # Default to 6 qubits for better letter/number recognition
+        ansatz_reps=2,  # Default to 2 repetitions for more expressive circuit
+        num_classes=36,  # Default to 36 classes (10 digits + 26 letters)
         input_channels=1,
         sampler: Optional[Sampler] = None,
         use_gpu: bool = True,
+        device: Optional[torch.device] = None,
     ):
         super().__init__()
+
+        # Set device - use provided device or auto-detect
+        if device is None:
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        else:
+            self.device = device
+
         logger.info(
-            "Initializing HybridModel with %s qubits, %s ansatz reps, and %d number of classes",
+            "Initializing HybridModel with %s qubits, %s ansatz reps, %d classes on device: %s",
             n_qubits,
             ansatz_reps,
             num_classes,
+            self.device,
         )
 
         # Input validation
@@ -63,7 +74,7 @@ class HybridModel(nn.Module):
         self.n_qubits = n_qubits
         self.ansatz_reps = ansatz_reps
         self.num_classes = num_classes
-        self.use_gpu = use_gpu
+        self.use_gpu = use_gpu and self.device.type == "cuda"
 
         # Classical CNN feature extractor for 64x64 pixel images
         # After 3 MaxPool2D layers (each dividing by 2): 64x64 -> 32x32 -> 16x16 -> 8x8
@@ -84,11 +95,11 @@ class HybridModel(nn.Module):
             # Flatten and Dense layers
             nn.Flatten(),
             nn.Linear(
-                128 * 8 * 8, 128
-            ),  # 8x8 is the size after 3 MaxPool2D layers from 64x64 input
+                128 * 8 * 8, 256
+            ),  # Increased hidden layer size for 6-qubit support
             nn.ReLU(),
             nn.Dropout(0.5),
-            nn.Linear(128, n_qubits),
+            nn.Linear(256, n_qubits),
             # Activation ensures values are in proper range for quantum circuit
             nn.Tanh(),
         )
@@ -106,52 +117,49 @@ class HybridModel(nn.Module):
 
         # Combine feature map and ansatz
         # circuit = self.feature_map.compose(self.ansatz)
+        # circuit = self.feature_map.compose(self.ansatz)
         circuit = QuantumCircuit(n_qubits)
-        circuit.append(self.feature_map, range(n_qubits))
-        circuit.append(self.ansatz, range(n_qubits))
+        circuit.compose(self.feature_map, inplace=True)
+        circuit.compose(self.ansatz, inplace=True)
+        logger.debug("Quantum circuit created with depth: %s", circuit.depth())
+        logger.debug("Quantum circuit: %s", circuit)
+        logger.debug("Quantum circuit parameters: %s", circuit.parameters)
 
         # Setup GPU-accelerated sampler if requested
         aer_simulator = None
-        logger.info("use_gpu: %s", use_gpu)
-        logger.info("TORCH: %s", torch.cuda.is_available())
+        logger.info("use_gpu: %s", self.use_gpu)
+        logger.info("Device: %s", self.device)
         if sampler is None:
-            if use_gpu and torch.cuda.is_available():
+            if self.use_gpu:
                 logger.info(
                     "Using GPU-accelerated quantum simulator via qiskit-aer-gpu"
                 )
                 try:
                     # Create simulator with GPU method
-                    aer_simulator = qiskit_aer.AerSimulator()
-                    aer_simulator.set_options(device="GPU")
-
-                    # Configure GPU in the options dictionary
-                    backend_options = {"method": "statevector"}
-                    run_options = {"device": "GPU"}
-
-                    # Create SamplerV2 with the correct options structure
-                    self.sampler = SamplerV2(
-                        options={
-                            "backend_options": backend_options,
-                            "run_options": run_options,
-                        }
+                    aer_simulator = qiskit_aer.AerSimulator(
+                        method="statevector", device="GPU"
                     )
+
+                    # # Create SamplerV2 with GPU backend
+                    # self.sampler = SamplerV2(
+                    #     backend_options={"method": "statevector"},
+                    #     run_options={"device": "GPU"},
+                    # )
                     logger.info(
                         "GPU acceleration successfully enabled for quantum simulation"
                     )
                 except Exception as e:
                     logger.warning(f"Failed to initialize GPU quantum simulator: {e}")
                     logger.info("Falling back to CPU-based quantum simulation")
-                    self.sampler = Sampler()
                     aer_simulator = None
             else:
-                if use_gpu and not torch.cuda.is_available():
+                if use_gpu and self.device.type != "cuda":
                     logger.warning(
                         "GPU requested but not available, falling back to CPU"
                     )
                 logger.info("Using CPU-based quantum simulator")
-                self.sampler = Sampler()
-        else:
-            self.sampler = sampler
+        
+        self.sampler = Sampler()
 
         # Force decomposition and transpilation of the circuit for GPU simulation
         if aer_simulator:
@@ -167,36 +175,54 @@ class HybridModel(nn.Module):
                 circuit,
                 backend=aer_simulator,
                 basis_gates=["rx", "ry", "rz", "cx", "x", "h"],
+                optimization_level=3,  # Use highest optimization for 6-qubit circuits
             )
             logger.info(
                 f"Circuit successfully decomposed and transpiled, depth: {circuit.depth()}"
             )
 
-            # Print some info about the circuit to verify it's properly decomposed
-            logger.debug(
-                f"Transpiled circuit instructions: {[op.name for op in circuit.data]}"
-            )
-
-        # Extract parameters from the transpiled circuit
+        # Extract parameters from the circuit
         input_params = self.feature_map.parameters
         weight_params = self.ansatz.parameters
 
         # Quantum layer setup
-        self.qnn = SamplerQNN(
-            circuit=circuit,
-            input_params=input_params,
-            weight_params=weight_params,
-            sampler=self.sampler,
-            input_gradients=True,
+        # self.qnn = SamplerQNN(
+        #     circuit=circuit,
+        #     input_params=input_params,
+        #     weight_params=weight_params,
+        #     sampler=self.sampler,
+        #     input_gradients=True,
+        # )
+        estimator = Estimator()
+        self.qnn = EstimatorQNN(
+        circuit=circuit,
+        input_params=self.feature_map.parameters,
+        weight_params=self.ansatz.parameters,
+        input_gradients=True,
+        estimator=estimator,
+    )
+
+        # Create TorchConnector with quantum network
+        logger.info("Creating TorchConnector for SamplerQNN")
+        initial_weights = 0.1 * (
+            2 * algorithm_globals.random.random(self.qnn.num_weights) - 1
         )
-        self.quantum_layer = TorchConnector(self.qnn)
+        self.quantum_layer = TorchConnector(self.qnn, initial_weights=initial_weights)
 
         # Final classification layer
-        logger.debug(
-            "Creating final classifier layer: %s -> %s", 2**n_qubits, num_classes
-        )
-        self.classifier = nn.Linear(2**n_qubits, num_classes)
+        logger.debug("Creating final classifier layer: %s -> %s", 2**n_qubits, num_classes)
 
+        self.classifier = nn.Sequential(
+            nn.Linear(n_qubits, num_classes * 2),
+            nn.ReLU(),
+            nn.Dropout(0.2),  # Add dropout for better generalization
+            nn.Linear(num_classes * 2, num_classes),
+        )
+
+
+        # Move model to specified device
+        self.to(self.device)
+        logger.info(f"Model moved to device: {self.device}")
         logger.info("Model initialization complete")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -209,6 +235,9 @@ class HybridModel(nn.Module):
         Returns:
             Class probabilities of shape [batch_size, num_classes]
         """
+        # Ensure input is on the correct device
+        x = x.to(self.device)
+
         # Classical CNN: image -> n_qubits features
         classical_out = self.classical_net(x)
 
@@ -224,7 +253,11 @@ class HybridModel(nn.Module):
         q_out_batch = torch.stack(q_out_list)
 
         # Classification: quantum output -> class probabilities
-        return self.classifier(q_out_batch)
+        logits = self.classifier(q_out_batch)
+
+        # Apply log-softmax to ensure outputs are compatible with NLLLoss
+        # This follows the tutorial pattern with NLLLoss
+        return torch.log_softmax(logits, dim=1)
 
     def get_circuit_depth(self) -> int:
         """Returns the depth of the quantum circuit used in the model."""
@@ -240,5 +273,6 @@ class HybridModel(nn.Module):
             "classical_params": sum(p.numel() for p in self.classical_net.parameters()),
             "quantum_params": len(self.ansatz.parameters),
             "total_params": sum(p.numel() for p in self.parameters()),
-            "using_gpu_quantum": self.use_gpu and torch.cuda.is_available(),
+            "device": str(self.device),
+            "using_gpu_quantum": self.use_gpu,
         }

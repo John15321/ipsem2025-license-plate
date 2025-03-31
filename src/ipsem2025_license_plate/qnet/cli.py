@@ -23,9 +23,9 @@ logger = get_logger(__name__)
 
 @app.command("train")
 def train_command(
-    n_qubits: int = typer.Option(2, "--n-qubits", "-q", help="Number of qubits to use"),
+    n_qubits: int = typer.Option(6, "--n-qubits", "-q", help="Number of qubits to use"),
     ansatz_reps: int = typer.Option(
-        1, "--ansatz-reps", "-r", help="Depth of RealAmplitudes ansatz"
+        2, "--ansatz-reps", "-r", help="Depth of RealAmplitudes ansatz"
     ),
     epochs: int = typer.Option(3, "--epochs", "-e", help="Number of training epochs"),
     batch_size: int = typer.Option(
