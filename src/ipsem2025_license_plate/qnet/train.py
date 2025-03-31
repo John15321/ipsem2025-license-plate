@@ -55,7 +55,6 @@ def train_model(
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     # optimizer = LBFGS(model.parameters())
 
-
     model.to(device)
 
     # Track hardware info

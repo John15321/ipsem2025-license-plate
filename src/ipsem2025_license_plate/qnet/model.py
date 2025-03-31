@@ -11,10 +11,8 @@ from qiskit.circuit.library import RealAmplitudes, ZZFeatureMap
 from qiskit.primitives import Sampler
 from qiskit_aer.primitives import SamplerV2
 from qiskit_machine_learning.connectors import TorchConnector
-from qiskit_machine_learning.neural_networks import SamplerQNN, EstimatorQNN
-from qiskit_machine_learning.utils import algorithm_globals
+from qiskit_machine_learning.neural_networks import SamplerQNN
 from torch import nn
-from qiskit.primitives import StatevectorEstimator as Estimator
 
 from ..utils.logging_utils import get_logger
 
@@ -106,24 +104,27 @@ class HybridModel(nn.Module):
 
         # Quantum circuit setup
         logger.debug("Creating quantum feature map with %s qubits", n_qubits)
-        self.feature_map = ZZFeatureMap(feature_dimension=n_qubits, reps=2)
+        # For 6 qubits, use a different repetition strategy to avoid overly complex circuits
+        feature_map_reps = 1 if n_qubits > 4 else 2
+        self.feature_map = ZZFeatureMap(
+            feature_dimension=n_qubits, reps=feature_map_reps
+        )
 
         logger.debug(
             "Creating RealAmplitudes ansatz with %s qubits, %s repetitions",
             n_qubits,
             ansatz_reps,
         )
-        self.ansatz = RealAmplitudes(num_qubits=n_qubits, reps=ansatz_reps)
+        # For 6 qubits, use linear entanglement to reduce circuit depth
+        entanglement = "linear" if n_qubits > 4 else "full"
+        self.ansatz = RealAmplitudes(
+            num_qubits=n_qubits, reps=ansatz_reps, entanglement=entanglement
+        )
 
         # Combine feature map and ansatz
-        # circuit = self.feature_map.compose(self.ansatz)
-        # circuit = self.feature_map.compose(self.ansatz)
         circuit = QuantumCircuit(n_qubits)
-        circuit.compose(self.feature_map, inplace=True)
-        circuit.compose(self.ansatz, inplace=True)
-        logger.debug("Quantum circuit created with depth: %s", circuit.depth())
-        logger.debug("Quantum circuit: %s", circuit)
-        logger.debug("Quantum circuit parameters: %s", circuit.parameters)
+        circuit.append(self.feature_map, range(n_qubits))
+        circuit.append(self.ansatz, range(n_qubits))
 
         # Setup GPU-accelerated sampler if requested
         aer_simulator = None
@@ -140,17 +141,18 @@ class HybridModel(nn.Module):
                         method="statevector", device="GPU"
                     )
 
-                    # # Create SamplerV2 with GPU backend
-                    # self.sampler = SamplerV2(
-                    #     backend_options={"method": "statevector"},
-                    #     run_options={"device": "GPU"},
-                    # )
+                    # Create SamplerV2 with GPU backend
+                    self.sampler = SamplerV2(
+                        backend_options={"method": "statevector"},
+                        run_options={"device": "GPU"},
+                    )
                     logger.info(
                         "GPU acceleration successfully enabled for quantum simulation"
                     )
                 except Exception as e:
                     logger.warning(f"Failed to initialize GPU quantum simulator: {e}")
                     logger.info("Falling back to CPU-based quantum simulation")
+                    self.sampler = Sampler()
                     aer_simulator = None
             else:
                 if use_gpu and self.device.type != "cuda":
@@ -158,8 +160,9 @@ class HybridModel(nn.Module):
                         "GPU requested but not available, falling back to CPU"
                     )
                 logger.info("Using CPU-based quantum simulator")
-        
-        self.sampler = Sampler()
+                self.sampler = Sampler()
+        else:
+            self.sampler = sampler
 
         # Force decomposition and transpilation of the circuit for GPU simulation
         if aer_simulator:
@@ -185,40 +188,36 @@ class HybridModel(nn.Module):
         input_params = self.feature_map.parameters
         weight_params = self.ansatz.parameters
 
-        # Quantum layer setup
-        # self.qnn = SamplerQNN(
-        #     circuit=circuit,
-        #     input_params=input_params,
-        #     weight_params=weight_params,
-        #     sampler=self.sampler,
-        #     input_gradients=True,
-        # )
-        estimator = Estimator()
-        self.qnn = EstimatorQNN(
-        circuit=circuit,
-        input_params=self.feature_map.parameters,
-        weight_params=self.ansatz.parameters,
-        input_gradients=True,
-        estimator=estimator,
-    )
+        # Set output shape - this is critical to fix the dimension mismatch
+        # For 6 qubits, the state space is 2^6 = 64 dimensions
+        qnn_output_dim = 2**n_qubits  # This will be 64 for 6 qubits
+        logger.info(f"Using QNN output dimension of {qnn_output_dim}")
+
+        # Quantum layer setup with correct output dimension
+        logger.info(
+            "Initializing SamplerQNN with input_gradients=True for proper backpropagation"
+        )
+        self.qnn = SamplerQNN(
+            circuit=circuit,
+            input_params=input_params,
+            weight_params=weight_params,
+            sampler=self.sampler,
+            input_gradients=True,  # Critical for hybrid model gradient flow
+            sparse=False,  # Return dense probability array for proper backprop
+            # No interpret function to ensure we get full 2^n_qubits output dimension
+        )
 
         # Create TorchConnector with quantum network
         logger.info("Creating TorchConnector for SamplerQNN")
-        initial_weights = 0.1 * (
-            2 * algorithm_globals.random.random(self.qnn.num_weights) - 1
-        )
-        self.quantum_layer = TorchConnector(self.qnn, initial_weights=initial_weights)
+        self.quantum_layer = TorchConnector(self.qnn)
 
-        # Final classification layer
-        logger.debug("Creating final classifier layer: %s -> %s", 2**n_qubits, num_classes)
-
-        self.classifier = nn.Sequential(
-            nn.Linear(n_qubits, num_classes * 2),
-            nn.ReLU(),
-            nn.Dropout(0.2),  # Add dropout for better generalization
-            nn.Linear(num_classes * 2, num_classes),
+        # Final classification layer - correctly sized for the QNN output
+        logger.debug(
+            "Creating final classifier layer: %s -> %s", qnn_output_dim, num_classes
         )
 
+        # Classifier that handles the proper dimension
+        self.classifier = nn.Linear(qnn_output_dim, num_classes)
 
         # Move model to specified device
         self.to(self.device)
@@ -256,7 +255,6 @@ class HybridModel(nn.Module):
         logits = self.classifier(q_out_batch)
 
         # Apply log-softmax to ensure outputs are compatible with NLLLoss
-        # This follows the tutorial pattern with NLLLoss
         return torch.log_softmax(logits, dim=1)
 
     def get_circuit_depth(self) -> int:
