@@ -19,18 +19,23 @@ from qiskit_machine_learning.connectors import TorchConnector
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
-# 1. Simple dataset preparation
-print("Loading MNIST dataset (subset)...")
+# 1. Dataset preparation with EMNIST
+print("Loading EMNIST dataset (subset)...")
 transform = transforms.Compose([
     transforms.ToTensor(),
     transforms.Resize((64, 64)),  # Resized to 64x64 to match CNN architecture
 ])
 
-# Load a small subset of MNIST for quick analysis
-train_dataset = datasets.MNIST(root="./data", train=True, download=True, transform=transform)
-test_dataset = datasets.MNIST(root="./data", train=False, download=True, transform=transform)
-
-# Use only first 100 samples for quick analysis
+# EMNIST with letters (26 classes)
+train_dataset = datasets.EMNIST(
+    root="./data", split="letters", train=True, download=True, transform=transform
+)
+test_dataset = datasets.EMNIST(
+    root="./data", split="letters", train=False, download=True, transform=transform
+)
+num_classes = 26  # A-Z
+print("Successfully loaded EMNIST letters dataset")
+# Use a small subset for quick analysis
 train_subset = torch.utils.data.Subset(train_dataset, range(100))
 test_subset = torch.utils.data.Subset(test_dataset, range(20))
 
@@ -38,6 +43,7 @@ train_loader = DataLoader(train_subset, batch_size=10, shuffle=True)
 test_loader = DataLoader(test_subset, batch_size=5, shuffle=False)
 
 print(f"Dataset loaded: {len(train_subset)} training samples, {len(test_subset)} test samples")
+print(f"Number of classes: {num_classes}")
 
 # 2. Simple 6-qubit quantum neural network
 def create_quantum_nn():
@@ -72,7 +78,7 @@ def create_quantum_nn():
 
 # 3. Hybrid model - combines classical NN with quantum NN
 class SimpleHybridModel(nn.Module):
-    def __init__(self, n_classes=10, n_qubits=6, input_channels=1):
+    def __init__(self, n_classes=26, n_qubits=6, input_channels=1):
         super().__init__()
         
         # 1. Classical CNN feature extraction - using the provided architecture
@@ -142,6 +148,11 @@ def simple_training_loop(model, train_loader, epochs=2):
         running_loss = 0.0
         
         for i, (inputs, labels) in enumerate(train_loader):
+            # Handle EMNIST shift in labels (EMNIST letters are 1-based instead of 0-based)
+            if hasattr(train_loader.dataset.dataset, 'classes') and len(train_loader.dataset.dataset.classes) > 10:
+                # EMNIST letters labels start from 1, shift them to be 0-indexed
+                labels = labels - 1
+                
             inputs, labels = inputs.to(device), labels.to(device)
             
             # Zero gradients
@@ -173,6 +184,11 @@ def simple_evaluation(model, test_loader):
     
     with torch.no_grad():
         for inputs, labels in test_loader:
+            # Handle EMNIST shift in labels (EMNIST letters are 1-based instead of 0-based)
+            if hasattr(test_loader.dataset.dataset, 'classes') and len(test_loader.dataset.dataset.classes) > 10:
+                # EMNIST letters labels start from 1, shift them to be 0-indexed
+                labels = labels - 1
+                
             inputs, labels = inputs.to(device), labels.to(device)
             outputs = model(inputs)
             _, predicted = torch.max(outputs.data, 1)
@@ -184,10 +200,10 @@ def simple_evaluation(model, test_loader):
     
     return accuracy
 
-# 6. Main execution
+# 7. Main execution
 if __name__ == "__main__":
     print("Creating hybrid quantum-classical model...")
-    model = SimpleHybridModel(n_classes=10, n_qubits=6, input_channels=1)  # MNIST has 10 classes
+    model = SimpleHybridModel(n_classes=num_classes, n_qubits=6, input_channels=1)
     
     print("\nModel architecture:")
     print("1. Classical pre-processing (CNN):")
@@ -195,7 +211,11 @@ if __name__ == "__main__":
     print("2. Quantum processing:")
     print("   6 features → 6-qubit quantum circuit → 1 measurement")
     print("3. Classical post-processing:")
-    print("   1 quantum output → Linear(1→10) → 10 classes\n")
+    print(f"   1 quantum output → Linear(1→{num_classes}) → {num_classes} classes\n")
+    
+    # Visualize some samples from the dataset
+    print("Visualizing dataset samples:")
+    # visualize_samples(train_loader)
     
     print("Training model (minimal training to demonstrate functionality)...")
     model = simple_training_loop(model, train_loader, epochs=1)
@@ -204,5 +224,5 @@ if __name__ == "__main__":
     accuracy = simple_evaluation(model, test_loader)
     
     print("Saving model...")
-    torch.save(model.state_dict(), "simple_hybrid_model.pt")
-    print("Model saved to simple_hybrid_model.pt")
+    torch.save(model.state_dict(), "emnist_hybrid_model_6qubits.pt")
+    print("Model saved to emnist_hybrid_model_6qubits.pt")
