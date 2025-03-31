@@ -308,7 +308,6 @@ def train_hybrid_model(
         n_qubits=n_qubits,
         ansatz_reps=ansatz_reps,
         num_classes=num_classes,
-        sampler=sampler,
         use_gpu=use_gpu_for_qnn,
     )
     model_info = model.get_model_info()
