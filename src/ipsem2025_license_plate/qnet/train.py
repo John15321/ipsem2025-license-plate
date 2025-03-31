@@ -52,8 +52,8 @@ def train_model(
     logger.info("Starting training for %s epochs on %s", epochs, device)
 
     criterion = nn.MSELoss()
-    # optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    optimizer = LBFGS(model.parameters(), learning_rate=learning_rate)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    # optimizer = LBFGS(model.parameters())
 
 
     model.to(device)
