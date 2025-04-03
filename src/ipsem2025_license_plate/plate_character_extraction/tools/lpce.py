@@ -13,12 +13,21 @@ import sys
 from enum import Enum
 from math import sqrt
 from time import time
+import logging
 
+from ipsem2025_license_plate.utils.logging_utils import get_logger
 import cv2
 import imutils
 import numpy as np
 from tqdm import tqdm
 
+logger = get_logger(__name__)
+# logger.setLevel(logging.INFO)  # Możesz zmienić na DEBUG, jeśli chcesz więcej szczegółów
+# ch = logging.StreamHandler()
+# ch.setLevel(logging.INFO)
+# formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+# ch.setFormatter(formatter)
+# logger.addHandler(ch)
 
 # Define a custom ENUM to specify which text-extraction function should be executed
 # later on on the last step of the pipeline
@@ -1166,20 +1175,18 @@ class PlateExtractor:
 
         # Check if path is none then exit
         if input_path is None:
-            print("Path must be a folder containing images or a single plate image.")
+            logger.error("Path must be a folder containing images or a single plate image.")
             exit(1)
 
         # First thing, we check if the passed input path is a directory:
         if os.path.isdir(input_path):
 
-            print(
-                "Going to extract {} images from: {}".format(
-                    len(os.listdir(input_path)), input_path
-                )
-            )
+            logger.info("Going to extract {} images from: {}".format(len(os.listdir(input_path)), input_path))
+
 
             # If so, we are going to extract image by image the files in that directory.
-            for file in tqdm(sorted(os.listdir(input_path))):
+            for file in tqdm(sorted(os.listdir(input_path)), desc="Processing images"):
+                
 
                 # We then check if the fhe file extracted is a folder
                 if os.path.isdir(file):
@@ -1190,6 +1197,8 @@ class PlateExtractor:
                 # it's relative folder
                 # We then open the image
                 plate = cv2.imread(os.path.join(input_path, file))
+
+                logger.info(f"Processing file: {file}")
 
                 # extract the grayscale normalized and the binarized optimal plate
                 gray_plate, bin_plate, adaptive_coord = self.adaptive_preprocessing(
