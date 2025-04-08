@@ -8,15 +8,21 @@ import qiskit_aer
 import torch
 from qiskit import QuantumCircuit, transpile
 from qiskit.circuit.library import RealAmplitudes, ZZFeatureMap
-from qiskit.primitives import Sampler
+# from qiskit.primitives import SamplerV2
 from qiskit_aer.primitives import SamplerV2
+from qiskit.primitives import BackendSamplerV2
 from qiskit_machine_learning.connectors import TorchConnector
 from qiskit_machine_learning.neural_networks import SamplerQNN
 from torch import nn
+from qiskit_aer import Aer
 
 from ..utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
+
+simulator_gpu = BackendSamplerV2(backend=Aer.get_backend(name='statevector_simulator', backend_options={"device": "GPU"}))
+
+
 
 
 class HybridModel(nn.Module):
@@ -102,6 +108,30 @@ class HybridModel(nn.Module):
             nn.Tanh(),
         )
 
+        # TODO
+
+        # Create TorchConnector with quantum network
+        logger.info("Creating TorchConnector for SamplerQNN")
+        self.quantum_layer = TorchConnector(self.qnn)
+
+        # Final classification layer - correctly sized for the QNN output
+        logger.debug(
+            "Creating final classifier layer: %s -> %s", qnn_output_dim, num_classes
+        )
+
+        # Classifier that handles the proper dimension
+        self.classifier = nn.Linear(qnn_output_dim, num_classes)
+
+        # Move model to specified device
+        self.to(self.device)
+        logger.info(f"Model moved to device: {self.device}")
+        logger.info("Model initialization complete")
+
+
+
+
+    def create_quantum_network(self, n_qubits: int, ansatz_reps: int):
+        """Creates the quantum circuit and sampler for the model."""
         # Quantum circuit setup
         logger.debug("Creating quantum feature map with %s qubits", n_qubits)
         # For 6 qubits, use a different repetition strategy to avoid overly complex circuits
@@ -130,59 +160,34 @@ class HybridModel(nn.Module):
         aer_simulator = None
         logger.info("use_gpu: %s", self.use_gpu)
         logger.info("Device: %s", self.device)
-        if sampler is None:
-            if self.use_gpu:
-                logger.info(
-                    "Using GPU-accelerated quantum simulator via qiskit-aer-gpu"
+        if self.use_gpu:
+            logger.info(
+                "Using GPU-accelerated quantum simulator via qiskit-aer-gpu"
+            )
+            try:
+                # Create simulator with GPU method
+                aer_simulator = BackendSamplerV2(backend=Aer.get_backend(name='statevector_simulator', backend_options={"device": "GPU"}))
+
+                # Create SamplerV2 with GPU backend
+                self.sampler = SamplerV2(
+                    backend_options={"method": "statevector"},
+                    run_options={"device": "GPU"},
                 )
-                try:
-                    # Create simulator with GPU method
-                    aer_simulator = qiskit_aer.AerSimulator(
-                        method="statevector", device="GPU"
-                    )
-
-                    # Create SamplerV2 with GPU backend
-                    self.sampler = SamplerV2(
-                        backend_options={"method": "statevector"},
-                        run_options={"device": "GPU"},
-                    )
-                    logger.info(
-                        "GPU acceleration successfully enabled for quantum simulation"
-                    )
-                except Exception as e:
-                    logger.warning(f"Failed to initialize GPU quantum simulator: {e}")
-                    logger.info("Falling back to CPU-based quantum simulation")
-                    self.sampler = Sampler()
-                    aer_simulator = None
-            else:
-                if use_gpu and self.device.type != "cuda":
-                    logger.warning(
-                        "GPU requested but not available, falling back to CPU"
-                    )
-                logger.info("Using CPU-based quantum simulator")
-                self.sampler = Sampler()
+                logger.info(
+                    "GPU acceleration successfully enabled for quantum simulation"
+                )
+            except Exception as e:
+                logger.warning(f"Failed to initialize GPU quantum simulator: {e}")
+                logger.info("Falling back to CPU-based quantum simulation")
+                self.sampler = ()
+                aer_simulator = None
         else:
-            self.sampler = sampler
-
-        # Force decomposition and transpilation of the circuit for GPU simulation
-        if aer_simulator:
-            logger.info(
-                "Forcing decomposition of quantum circuit for GPU compatibility"
-            )
-            # First explicitly decompose the circuit to break down high-level instructions
-            circuit = circuit.decompose(reps=3)  # Decompose multiple levels deep
-
-            # Then transpile the circuit with explicitly specified basis gates
-            logger.info("Transpiling quantum circuit with explicit basis gates")
-            circuit = transpile(
-                circuit,
-                backend=aer_simulator,
-                basis_gates=["rx", "ry", "rz", "cx", "x", "h"],
-                optimization_level=3,  # Use highest optimization for 6-qubit circuits
-            )
-            logger.info(
-                f"Circuit successfully decomposed and transpiled, depth: {circuit.depth()}"
-            )
+            if use_gpu and self.device.type != "cuda":
+                logger.warning(
+                    "GPU requested but not available, falling back to CPU"
+                )
+            logger.info("Using CPU-based quantum simulator")
+            self.sampler = SamplerV2()
 
         # Extract parameters from the circuit
         input_params = self.feature_map.parameters
@@ -207,22 +212,8 @@ class HybridModel(nn.Module):
             # No interpret function to ensure we get full 2^n_qubits output dimension
         )
 
-        # Create TorchConnector with quantum network
-        logger.info("Creating TorchConnector for SamplerQNN")
-        self.quantum_layer = TorchConnector(self.qnn)
 
-        # Final classification layer - correctly sized for the QNN output
-        logger.debug(
-            "Creating final classifier layer: %s -> %s", qnn_output_dim, num_classes
-        )
 
-        # Classifier that handles the proper dimension
-        self.classifier = nn.Linear(qnn_output_dim, num_classes)
-
-        # Move model to specified device
-        self.to(self.device)
-        logger.info(f"Model moved to device: {self.device}")
-        logger.info("Model initialization complete")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass through the hybrid model.
