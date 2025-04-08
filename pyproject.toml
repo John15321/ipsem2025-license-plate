@@ -23,7 +23,7 @@ opencv-python = "^4.11.0.86"
 pytesseract = "^0.3.13"
 imutils = "^0.5.4"
 nlopt = "^2.9.1"
-# qiskit-aer = "^0.17.0"
+qiskit-aer = "^0.17.0"
 qiskit-algorithms = "^0.3.1"
 
 [tool.poetry.scripts]

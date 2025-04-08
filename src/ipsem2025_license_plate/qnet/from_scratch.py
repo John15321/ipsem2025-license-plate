@@ -11,30 +11,32 @@ circ.measure_all()
 # Construct an ideal simulator with SamplerV2
 sampler = SamplerV2()
 job = sampler.run([circ], shots=128)
-from qiskit_aer.primitives import Estimator  # Make sure you import from qiskit_aer
+# Fixed typo in import
+from qiskit import *
 from qiskit.primitives import Estimator
-from qiskitr
+from qiskit_aer.primitives import Estimator  # Make sure you import from qiskit_aer
+
 # Perform an ideal simulation
 result_ideal = job.result()
 counts_ideal = result_ideal[0].data.meas.get_counts()
-print('Counts(ideal):', counts_ideal)
+print("Counts(ideal):", counts_ideal)
 # Additional torch-related imports
 import torch
-from torch import cat, no_grad, manual_seed
+import torch.nn.functional as F
+import torch.optim as optim
+from qiskit_aer import AerSimulator
+from qiskit_aer.primitives import Estimator  # Make sure you import from qiskit_aer
+from torch import cat, manual_seed, no_grad
+from torch.nn import (
+    Conv2d,
+    Dropout2d,
+    Flatten,
+    Linear,
+    MaxPool2d,
+    Module,
+    NLLLoss,
+    ReLU,
+    Sequential,
+)
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
-import torch.optim as optim
-from torch.nn import (
-    Module,
-    Conv2d,
-    Linear,
-    Dropout2d,
-    NLLLoss,
-    MaxPool2d,
-    Flatten,
-    Sequential,
-    ReLU,
-)
-import torch.nn.functional as F
-from qiskit_aer.primitives import Estimator  # Make sure you import from qiskit_aer
-from qiskit_aer import AerSimulator

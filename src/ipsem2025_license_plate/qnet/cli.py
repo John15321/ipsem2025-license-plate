@@ -2,6 +2,7 @@
 
 # pylint: disable=line-too-long,too-many-arguments,too-many-positional-arguments,too-many-locals,broad-exception-caught,f-string-without-interpolation,import-outside-toplevel,raising-format-tuple
 
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -26,6 +27,9 @@ def train_command(
     n_qubits: int = typer.Option(6, "--n-qubits", "-q", help="Number of qubits to use"),
     ansatz_reps: int = typer.Option(
         2, "--ansatz-reps", "-r", help="Depth of RealAmplitudes ansatz"
+    ),
+    feature_map_reps: int = typer.Option(
+        1, "--feature-map-reps", help="Depth of quantum feature map circuit"
     ),
     epochs: int = typer.Option(3, "--epochs", "-e", help="Number of training epochs"),
     batch_size: int = typer.Option(
@@ -58,7 +62,6 @@ def train_command(
     run_test: bool = typer.Option(
         False, "--test", "-t", help="Run evaluation on test set after training"
     ),
-    log_file: str = typer.Option(None, "--log-file", help="Path to save log output"),
     verbose: bool = typer.Option(
         False, "--verbose", "-v", help="Enable verbose output"
     ),
@@ -67,17 +70,42 @@ def train_command(
         "--use-gpu-for-qnn/--no-gpu-for-qnn",
         help="Use GPU acceleration for quantum circuit simulation",
     ),
+    save_intermediate: bool = typer.Option(
+        True,
+        "--save-intermediate/--no-save-intermediate",
+        help="Save intermediate models after each epoch",
+    ),
+    output_dir: str = typer.Option(
+        "runs", "--output-dir", "-o", help="Base directory for output files"
+    ),
+    preload_data: bool = typer.Option(
+        False, "--preload-data", help="Preload dataset into memory for faster access"
+    ),
+    num_workers: Optional[int] = typer.Option(
+        None, "--num-workers", help="Number of dataloader workers (default: auto)"
+    ),
 ) -> int:
     """Train a hybrid quantum-classical neural network."""
     try:
+        # Create run directory for outputs and logs
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        gpu_str = "gpu" if use_gpu_for_qnn else "cpu"
+        run_name = f"{timestamp}_q{n_qubits}_r{ansatz_reps}_fm{feature_map_reps}_{gpu_str}_{dataset_type}"
+        run_dir = Path(output_dir) / run_name
+        run_dir.mkdir(parents=True, exist_ok=True)
+        log_file = str(run_dir / "log.log")
+
         # Configure logging based on verbosity
         log_level = "DEBUG" if verbose else "INFO"
         configure_logging(
             level=log_level,
             log_to_console=True,
-            log_to_file=bool(log_file),
+            log_to_file=True,
             log_file=log_file,
         )
+
+        logger.info(f"Created run directory: {run_dir}")
+        logger.info(f"Logging to: {log_file}")
 
         # Validate dataset split ratios
         if not 0.0 <= train_ratio <= 1.0:
@@ -97,6 +125,7 @@ def train_command(
         logger.debug("Training parameters:")
         logger.debug("  n_qubits: %s", n_qubits)
         logger.debug("  ansatz_reps: %s", ansatz_reps)
+        logger.debug("  feature_map_reps: %s", feature_map_reps)
         logger.debug("  epochs: %s", epochs)
         logger.debug("  batch_size: %s", batch_size)
         logger.debug("  train_ratio: %s", train_ratio)
@@ -106,13 +135,24 @@ def train_command(
         logger.debug("  stats_file: %s", stats_file)
         logger.debug("  run_test: %s", run_test)
         logger.debug("  use_gpu_for_qnn: %s", use_gpu_for_qnn)
+        logger.debug("  save_intermediate: %s", save_intermediate)
+        logger.debug("  output_dir: %s", output_dir)
+        logger.debug("  preload_data: %s", preload_data)
+        logger.debug("  num_workers: %s", num_workers)
 
-        stats_file = Path(stats_file) if stats_file else None  # type: ignore
-        model_save_path = str(model_save_path) if model_save_path else None  # type: ignore
+        # Update paths to be within run directory if not explicitly provided
+        stats_file = (
+            run_dir / stats_file
+            if not Path(stats_file).is_absolute()
+            else Path(stats_file)
+        )
+        if not model_save_path:
+            model_save_path = str(run_dir / "model_final.pt")
 
         result = train_hybrid_model(
             n_qubits=n_qubits,
             ansatz_reps=ansatz_reps,
+            feature_map_reps=feature_map_reps,
             epochs=epochs,
             batch_size=batch_size,
             train_ratio=train_ratio,
@@ -122,16 +162,23 @@ def train_command(
             dataset_path=dataset_path,
             model_save_path=model_save_path,
             stats_file=stats_file,  # type: ignore
-            log_file=log_file,
+            run_dir=run_dir,  # Pass the run directory directly
             run_test=run_test,
             verbose=verbose,
             use_gpu_for_qnn=use_gpu_for_qnn,
+            save_intermediate=save_intermediate,
+            preload_data=preload_data,
+            num_workers=num_workers,
         )
         logger.info("Training completed successfully")
         if result["test_metrics"]:
             logger.info(
                 "Test accuracy: %.2f%%", result["test_metrics"]["test_accuracy"]
             )
+
+        if "run_dir" in result and result["run_dir"]:
+            console.print(f"\n[green]Run outputs saved to:[/green] {result['run_dir']}")
+
         return 0
     except Exception as e:
         logger.exception(f"Training failed: %s", e)
