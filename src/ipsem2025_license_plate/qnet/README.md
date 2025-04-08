@@ -57,7 +57,7 @@ ipsem2025-train train \
     --n-qubits 6 \
     --ansatz-reps 3 \
     --feature-map-reps 2 \
-    --epochs 20 \
+    --epochs 10 \
     --batch-size 128 \
     --train-ratio 0.7 \
     --val-ratio 0.15 \
