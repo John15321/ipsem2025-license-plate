@@ -180,21 +180,25 @@ class HybridModel(nn.Module):
         self.num_classes = num_classes
         self.use_gpu = use_gpu and self.device.type == "cuda"
 
-        # Define layers exactly like in the POC
-        self.conv1 = nn.Conv2d(input_channels, 2, kernel_size=5).to(self.device)
+        # Standard configuration for 64x64 EMNIST images with batch size 64
+        self.conv1 = nn.Conv2d(input_channels, 6, kernel_size=5).to(self.device)
         logger.info(f"conv1 created on device: {self.conv1.weight.device}")
+        # After first convolution: (64-5+0)/1 + 1 = 60x60x6
+        # After first pooling: 30x30x6
 
-        self.conv2 = nn.Conv2d(2, 16, kernel_size=5).to(self.device)
+        self.conv2 = nn.Conv2d(6, 16, kernel_size=5).to(self.device)
         logger.info(f"conv2 created on device: {self.conv2.weight.device}")
+        # After second convolution: (30-5+0)/1 + 1 = 26x26x16
+        # After second pooling: 13x13x16 = 2704 features
 
         self.dropout = nn.Dropout2d().to(self.device)
 
-        self.fc1 = nn.Linear(256, 64).to(self.device)
+        # Fixed fully connected layer sizes for 64x64 input images
+        # Corrected: Use actual flattened size 13x13x16 = 2704 as input dimension for fc1
+        self.fc1 = nn.Linear(2704, 64).to(self.device)  # 13x13x16 = 2704 input features
         logger.info(f"fc1 created on device: {self.fc1.weight.device}")
 
-        self.fc2 = nn.Linear(64, n_qubits).to(
-            self.device
-        )  # n_qubits-dimensional input to QNN
+        self.fc2 = nn.Linear(64, n_qubits).to(self.device)
         logger.info(f"fc2 created on device: {self.fc2.weight.device}")
 
         # Create quantum neural network using the POC approach
@@ -242,25 +246,45 @@ class HybridModel(nn.Module):
         """
         # Ensure input is on the correct device
         x = x.to(self.device, non_blocking=True)
+        batch_size = x.shape[0]
 
-        # Forward pass exactly like in POC
+        # Debug input shape
+        # logger.debug(f"Input shape: {x.shape}")
+
+        # Log the input shape to verify dimensions
+        # logger.debug(f"Input batch shape: {x.shape}")
+
+        # Forward pass through conv layers
         x = F.relu(self.conv1(x))
         x = F.max_pool2d(x, 2)
+        # logger.debug(f"After conv1+pool: {x.shape}")
+
         x = F.relu(self.conv2(x))
         x = F.max_pool2d(x, 2)
-        x = self.dropout(x)
-        x = x.view(x.shape[0], -1)
-        x = F.relu(self.fc1(x))
-        x = self.fc2(x)
+        # logger.debug(f"After conv2+pool: {x.shape}")
 
-        # Apply QNN directly to the batch
+        x = self.dropout(x)
+
+        # Flatten layer
+        x = x.view(batch_size, -1)
+        # logger.debug(f"After flatten: {x.shape}")
+
+        # Dense layers
+        x = F.relu(self.fc1(x))
+        # logger.debug(f"After fc1: {x.shape}")
+
+        x = self.fc2(x)
+        # logger.debug(f"After fc2: {x.shape}")
+
+        # Apply QNN
         x = self.qnn(x)
+        # logger.debug(f"After QNN: {x.shape}")
 
         # Final classical layer
         x = self.fc3(x)
+        # logger.debug(f"After fc3: {x.shape}")
 
-        # Apply log-softmax for classification output
-        x = F.log_softmax(x, dim=1)
+        # Return logits directly instead of applying log_softmax
         return x
 
     def get_circuit_depth(self) -> int:

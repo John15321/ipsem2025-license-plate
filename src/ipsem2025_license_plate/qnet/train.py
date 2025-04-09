@@ -67,7 +67,7 @@ def train_model(
             f"Max GPU memory allocated: {torch.cuda.max_memory_allocated(device) / 1e6:.2f} MB"
         )
 
-    criterion = nn.MSELoss().to(device)
+    criterion = nn.CrossEntropyLoss().to(device)
     logger.info(f"Loss function moved to device: {device}")
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -119,10 +119,56 @@ def train_model(
                     logger.info(
                         f"Batch data device: images={images.device}, labels={labels.device}"
                     )
+                    # Add debugging information about labels
+                    logger.info(
+                        f"Labels shape: {labels.shape}, Labels dtype: {labels.dtype}"
+                    )
+                    logger.info(
+                        f"Labels min: {labels.min().item()}, Labels max: {labels.max().item()}"
+                    )
+                    logger.info(f"Unique label values: {torch.unique(labels)}")
+                    logger.info(f"Number of unique labels: {len(torch.unique(labels))}")
+                    # Check if labels are within valid range for num_classes
+                    if hasattr(model, "num_classes"):
+                        num_classes = model.num_classes
+                        if labels.max() >= num_classes:
+                            logger.warning(
+                                f"Labels contain values >= num_classes ({num_classes})"
+                            )
+                            logger.warning(
+                                "This will cause an error with CrossEntropyLoss"
+                            )
 
                 optimizer.zero_grad(set_to_none=True)  # More efficient version
                 outputs = model(images)
-                loss = criterion(outputs, labels)
+
+                # Add debugging for the first batch
+                if batch_idx == 1 and epoch == 0:
+                    logger.info(f"Model outputs shape: {outputs.shape}")
+                    logger.info(f"Model output dtype: {outputs.dtype}")
+
+                # Ensure labels are long type as required by CrossEntropyLoss
+                if labels.dtype != torch.long:
+                    logger.warning(
+                        f"Converting labels from {labels.dtype} to torch.long"
+                    )
+                    labels = labels.long()
+
+                try:
+                    loss = criterion(outputs, labels)
+                except Exception as e:
+                    logger.error(f"Error computing loss: {e}")
+                    logger.error(
+                        f"outputs shape: {outputs.shape}, labels shape: {labels.shape}"
+                    )
+                    logger.error(
+                        f"outputs dtype: {outputs.dtype}, labels dtype: {labels.dtype}"
+                    )
+                    if batch_idx == 1:
+                        logger.error(f"First few outputs: {outputs[:2]}")
+                        logger.error(f"First few labels: {labels[:10]}")
+                    raise
+
                 loss.backward()
                 optimizer.step()
 
@@ -393,44 +439,6 @@ def train_hybrid_model(
         logger.info("  - GPU Memory: %s", hw_info.get("gpu_memory", "Unknown"))
 
     # Setup GPU-accelerated quantum sampler if requested
-    logger.info("Initializing quantum simulation backend...")
-    sampler = None
-    if use_gpu_for_qnn and device.type == "cuda":
-        logger.info("Creating GPU-accelerated quantum simulator via qiskit-aer-gpu")
-        try:
-            # Configure GPU in the options dictionary, not as a direct backend parameter
-            backend_options = {"method": "statevector"}
-            run_options = {"device": "GPU"}
-
-            # Create SamplerV2 with the correct options structure
-            sampler = SamplerV2(
-                options={"backend_options": backend_options, "run_options": run_options}
-            )
-            logger.info("GPU acceleration successfully enabled for quantum simulation")
-
-            # Try to verify Aer backend is using GPU
-            try:
-                from qiskit_aer import AerSimulator
-
-                sim = AerSimulator(method="statevector", device="GPU")
-                logger.info(f"AerSimulator GPU check: {sim.available_devices()}")
-                if "GPU" in sim.available_devices():
-                    logger.info("GPU confirmed available for AerSimulator")
-                else:
-                    logger.warning("GPU not found in AerSimulator available devices")
-            except Exception as e:
-                logger.warning(
-                    f"Could not verify GPU availability for AerSimulator: {e}"
-                )
-
-        except Exception as e:
-            logger.warning(f"Failed to initialize GPU quantum simulator: {e}")
-            logger.info("Falling back to CPU-based quantum simulation")
-            sampler = None
-    else:
-        if use_gpu_for_qnn and device.type != "cuda":
-            logger.warning("GPU requested for QNN but not available")
-            logger.info("Using CPU-based quantum simulation")
 
     logger.info("Loading dataset modules...")
     from ..datasets.custom import CustomImageDataset
@@ -562,6 +570,11 @@ def train_hybrid_model(
     if model_save_path is None:
         model_save_path = str(run_dir / "model_final.pt")
         logger.info(f"Will save final model to {model_save_path}")
+
+    # Generate a run name based on the directory name if none is provided
+    run_name = (
+        run_dir.name if run_dir else f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    )
 
     logger.info("Starting training...")
 
