@@ -5,7 +5,7 @@
 IPSEM 2025 License Plate detection.
 
 # Features
-
+ 
 The package comes with several modules for license plate recognition:
 
 - **QNet**: Hybrid quantum-classical neural network for character recognition ([Documentation](src/ipsem2025_license_plate/qnet/README.md))
