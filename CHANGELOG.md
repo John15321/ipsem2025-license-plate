@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/John15321/ipsem2025-license-plate/compare/v1.3.1...v1.4.0) (2025-07-18)
+
+
+### Features
+
+* This is a test ([adc5521](https://github.com/John15321/ipsem2025-license-plate/commit/adc5521030696d858a85760a0b8f310496c1295e))
+
 ## [1.3.1](https://github.com/John15321/ipsem2025-license-plate/compare/v1.3.0...v1.3.1) (2025-03-30)
 
 
